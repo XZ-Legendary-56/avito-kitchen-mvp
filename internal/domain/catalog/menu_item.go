@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"fmt"
+
 	"github.com/google/uuid"
 
 	"avito-kitchen/internal/domain/errs"
@@ -26,11 +28,14 @@ type MenuItem struct {
 // different messages shown to the customer.
 func (m MenuItem) EnsureAvailable(quantity int) error {
 	if !m.IsAvailable {
-		return errs.Newf(errs.CodeItemUnavailable, "menu item %q is unavailable", m.Name)
+		return errs.NewWithDetails(errs.CodeItemUnavailable,
+			fmt.Sprintf("menu item %q is unavailable", m.Name),
+			[]map[string]any{{"menuItemId": m.ID, "name": m.Name}})
 	}
 	if m.StockQty != nil && *m.StockQty < quantity {
-		return errs.Newf(errs.CodeInsufficientStock,
-			"only %d of menu item %q left, requested %d", *m.StockQty, m.Name, quantity)
+		return errs.NewWithDetails(errs.CodeInsufficientStock,
+			fmt.Sprintf("only %d of menu item %q left, requested %d", *m.StockQty, m.Name, quantity),
+			[]map[string]any{{"menuItemId": m.ID, "requested": quantity, "available": *m.StockQty}})
 	}
 	return nil
 }
@@ -41,8 +46,9 @@ func (m MenuItem) EnsureAvailable(quantity int) error {
 // silently charging the new price.
 func (m MenuItem) EnsurePriceUnchanged(snapshotPriceMinor int64) error {
 	if m.PriceMinor != snapshotPriceMinor {
-		return errs.Newf(errs.CodePriceChanged,
-			"price of %q changed from %d to %d", m.Name, snapshotPriceMinor, m.PriceMinor)
+		return errs.NewWithDetails(errs.CodePriceChanged,
+			fmt.Sprintf("price of %q changed from %d to %d", m.Name, snapshotPriceMinor, m.PriceMinor),
+			[]map[string]any{{"menuItemId": m.ID, "oldPriceMinor": snapshotPriceMinor, "newPriceMinor": m.PriceMinor}})
 	}
 	return nil
 }

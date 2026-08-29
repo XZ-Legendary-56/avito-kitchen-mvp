@@ -45,16 +45,27 @@ const (
 	CodeInternal        Code = "INTERNAL_ERROR"
 )
 
-// Error is a domain error: a stable Code plus a human-readable Message, and
-// optionally the lower-level error it wraps (kept reachable through Unwrap
-// so errors.Is/errors.As still work across the wrap, per PROMPT.md 10.2).
+// Error is a domain error: a stable Code plus a human-readable Message, an
+// optional structured Details payload, and optionally the lower-level error
+// it wraps (kept reachable through Unwrap so errors.Is/errors.As still work
+// across the wrap, per PROMPT.md 10.2).
+//
+// Details exists because some conflicts are about more than one thing at
+// once — PROMPT.md 5.2's error table asks INSUFFICIENT_STOCK to list how
+// much of *each* item is available, not just report the first shortage
+// found. Its shape matches api/openapi/*.yaml's Error.details exactly
+// ([]map[string]any is the same type as []map[string]interface{}) so
+// adapter/http/httperr can hand it to the generated response type with no
+// conversion step — but building it is still just constructing plain Go
+// maps, not touching HTTP or JSON, so this stays inside the layering rule.
 type Error struct {
 	Code    Code
 	Message string
+	Details []map[string]any
 	cause   error
 }
 
-// New creates a fresh domain error with no wrapped cause.
+// New creates a fresh domain error with no wrapped cause and no Details.
 func New(code Code, message string) *Error {
 	return &Error{Code: code, Message: message}
 }
@@ -62,6 +73,11 @@ func New(code Code, message string) *Error {
 // Newf is New with fmt.Sprintf-style formatting for Message.
 func Newf(code Code, format string, args ...any) *Error {
 	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
+}
+
+// NewWithDetails is New plus a structured Details payload.
+func NewWithDetails(code Code, message string, details []map[string]any) *Error {
+	return &Error{Code: code, Message: message, Details: details}
 }
 
 // Wrap creates a domain error that carries cause as its Unwrap target, for
