@@ -1,4 +1,4 @@
-.PHONY: up down logs build test lint migrate-up migrate-down migrate-status seed
+.PHONY: up down logs build test lint migrate-up migrate-down migrate-status seed generate
 
 # Host-side defaults for talking to the Compose postgres from outside Docker
 # (make migrate-up, make seed). 5434 because 5432/5433 are commonly already
@@ -38,6 +38,13 @@ migrate-status:
 
 seed:
 	$(db_env) go run ./cmd/seed
+
+# Regenerates the HTTP server code from api/openapi/*.yaml (oapi-codegen,
+# strict-server mode). Run this every time you edit an .yaml spec — the
+# code under internal/generated is machine-written and gets overwritten,
+# never hand-edited.
+generate:
+	go tool oapi-codegen -config api/openapi/publicapi.cfg.yaml api/openapi/public.yaml
 
 # Interim lint target for this stage: gofmt + go vet. Stage 12 replaces this
 # with golangci-lint once .golangci.yml (section 10.1 of PROMPT.md) is added.

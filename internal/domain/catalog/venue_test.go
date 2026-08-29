@@ -60,6 +60,23 @@ func TestVenue_EnsureCanOrder_Closed(t *testing.T) {
 	assert.Equal(t, errs.CodeVenueClosed, code)
 }
 
+func TestVenue_IsOpen_IndependentOfAcceptingOrders(t *testing.T) {
+	v := openMondayNineToTen()
+	v.AcceptingOrders = false
+
+	assert.True(t, v.IsOpen(at(time.Monday, 9, 30)),
+		"IsOpen must reflect only the schedule, not the manual accepting-orders flag")
+}
+
+func TestVenue_NextOpensAt_DelegatesToSchedule(t *testing.T) {
+	v := openMondayNineToTen()
+
+	next := v.NextOpensAt(at(time.Monday, 8, 0))
+
+	require.NotNil(t, next)
+	assert.Equal(t, at(time.Monday, 9, 0), *next)
+}
+
 func TestVenue_EnsureMinOrderReached(t *testing.T) {
 	v := catalog.Venue{MinOrderAmountMinor: 70000}
 

@@ -35,6 +35,14 @@ const (
 	CodeInsufficientStock        Code = "INSUFFICIENT_STOCK"
 	CodePriceChanged             Code = "PRICE_CHANGED"
 	CodeMinOrderAmountNotReached Code = "MIN_ORDER_AMOUNT_NOT_REACHED"
+
+	// Generic REST cases, shared by both APIs (api/openapi/*.yaml ErrorCode
+	// description): not business rules of their own, but still routed
+	// through the same Code -> HTTP status mapping in adapter/http/httperr
+	// so there is still only one place that decides a status code.
+	CodeValidationError Code = "VALIDATION_ERROR"
+	CodeNotFound        Code = "NOT_FOUND"
+	CodeInternal        Code = "INTERNAL_ERROR"
 )
 
 // Error is a domain error: a stable Code plus a human-readable Message, and
@@ -75,11 +83,20 @@ func (e *Error) Unwrap() error {
 	return e.cause
 }
 
-// CodeOf extracts the Code carried by err, if err is or wraps an *Error.
-func CodeOf(err error) (Code, bool) {
+// As extracts the *Error carried by err, if err is or wraps one.
+func As(err error) (*Error, bool) {
 	var domainErr *Error
 	if errors.As(err, &domainErr) {
-		return domainErr.Code, true
+		return domainErr, true
 	}
-	return "", false
+	return nil, false
+}
+
+// CodeOf extracts the Code carried by err, if err is or wraps an *Error.
+func CodeOf(err error) (Code, bool) {
+	domainErr, ok := As(err)
+	if !ok {
+		return "", false
+	}
+	return domainErr.Code, true
 }

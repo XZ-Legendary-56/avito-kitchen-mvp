@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"avito-kitchen/internal/domain/catalog"
 )
@@ -55,4 +56,43 @@ func TestIsOpenAt_MultipleDaysOnlyMatchingOneApplies(t *testing.T) {
 
 	assert.True(t, catalog.IsOpenAt(schedule, at(time.Tuesday, 12, 30)))
 	assert.False(t, catalog.IsOpenAt(schedule, at(time.Tuesday, 9, 30)), "Monday's hours must not leak into Tuesday")
+}
+
+func TestNextOpenAfter_NoEntries(t *testing.T) {
+	assert.Nil(t, catalog.NextOpenAfter(nil, at(time.Monday, 9, 30)))
+}
+
+func TestNextOpenAfter_LaterTodayIfNotYetOpened(t *testing.T) {
+	next := catalog.NextOpenAfter(mondayNineToTen, at(time.Monday, 8, 0))
+
+	require.NotNil(t, next)
+	assert.Equal(t, at(time.Monday, 9, 0), *next)
+}
+
+func TestNextOpenAfter_NextWeekIfTodaysWindowAlreadyPassed(t *testing.T) {
+	next := catalog.NextOpenAfter(mondayNineToTen, at(time.Monday, 11, 0))
+
+	require.NotNil(t, next)
+	assert.Equal(t, at(time.Monday, 9, 0).AddDate(0, 0, 7), *next)
+}
+
+func TestNextOpenAfter_SkipsToTheNearestFutureDay(t *testing.T) {
+	schedule := []catalog.ScheduleEntry{
+		{Weekday: time.Wednesday, OpensAt: 9 * time.Hour, ClosesAt: 17 * time.Hour},
+	}
+
+	next := catalog.NextOpenAfter(schedule, at(time.Monday, 9, 30))
+
+	require.NotNil(t, next)
+	assert.Equal(t, at(time.Wednesday, 9, 0), *next)
+}
+
+func TestNextOpenAfter_WhileCurrentlyOpenStillReportsToday(t *testing.T) {
+	// A venue open right now has no "next opening" in the everyday sense,
+	// but NextOpenAfter is defined purely in terms of "when does a window
+	// next start" — callers only use it when IsOpen is already false.
+	next := catalog.NextOpenAfter(mondayNineToTen, at(time.Monday, 9, 30))
+
+	require.NotNil(t, next)
+	assert.Equal(t, at(time.Monday, 9, 0).AddDate(0, 0, 7), *next)
 }

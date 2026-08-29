@@ -13,6 +13,7 @@ type MenuItem struct {
 	ID          uuid.UUID
 	VenueID     uuid.UUID
 	Name        string
+	Description string
 	PriceMinor  int64
 	IsAvailable bool
 	StockQty    *int

@@ -13,6 +13,7 @@ type Venue struct {
 	ID                  uuid.UUID
 	PartnerID           uuid.UUID
 	Name                string
+	Description         string
 	Cuisine             string
 	MinOrderAmountMinor int64
 	AcceptingOrders     bool
@@ -32,6 +33,22 @@ func (v Venue) EnsureCanOrder(now time.Time) error {
 		return errs.New(errs.CodeVenueClosed, "venue is closed right now")
 	}
 	return nil
+}
+
+// IsOpen reports whether v's weekly schedule has a window covering now.
+// This is deliberately independent of AcceptingOrders — the API shows them
+// as two separate fields (api/openapi/public.yaml Venue.isOpen), because
+// "closed for the night" and "temporarily paused by the venue" are
+// different facts a customer should be told apart. EnsureCanOrder is the
+// method that combines both into a single business gate.
+func (v Venue) IsOpen(now time.Time) bool {
+	return IsOpenAt(v.Schedule, now)
+}
+
+// NextOpensAt returns when v's schedule next opens after now, or nil if v
+// has no schedule at all. Meaningful only when IsOpen(now) is false.
+func (v Venue) NextOpensAt(now time.Time) *time.Time {
+	return NextOpenAfter(v.Schedule, now)
 }
 
 // EnsureMinOrderReached returns MIN_ORDER_AMOUNT_NOT_REACHED if totalMinor
