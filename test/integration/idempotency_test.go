@@ -39,6 +39,7 @@ func TestPlaceOrder_IdempotentRetry_ReturnsSameOrderWithoutDuplicating(t *testin
 		pgadapter.NewMenuRepository(pool),
 		pgadapter.NewOrderRepository(pool),
 		pgadapter.NewIdempotencyRepository(pool),
+		pgadapter.NewOutboxRepository(pool),
 		pgadapter.NewTxManager(pool),
 	)
 
@@ -80,6 +81,7 @@ func TestPlaceOrder_SameKeyDifferentBody_ReturnsConflict(t *testing.T) {
 		pgadapter.NewMenuRepository(pool),
 		pgadapter.NewOrderRepository(pool),
 		pgadapter.NewIdempotencyRepository(pool),
+		pgadapter.NewOutboxRepository(pool),
 		pgadapter.NewTxManager(pool),
 	)
 
@@ -119,6 +121,7 @@ func TestPlaceOrder_ConcurrentDuplicateSubmissions_OnlyOneOrderCreated(t *testin
 		pgadapter.NewMenuRepository(pool),
 		pgadapter.NewOrderRepository(pool),
 		pgadapter.NewIdempotencyRepository(pool),
+		pgadapter.NewOutboxRepository(pool),
 		pgadapter.NewTxManager(pool),
 	)
 

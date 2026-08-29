@@ -18,11 +18,12 @@ import (
 // touch the order itself.
 type OrderService struct {
 	orders    OrderRepository
+	outbox    OutboxRepository
 	txManager usecase.TxManager
 }
 
-func NewOrderService(orders OrderRepository, txManager usecase.TxManager) *OrderService {
-	return &OrderService{orders: orders, txManager: txManager}
+func NewOrderService(orders OrderRepository, outbox OutboxRepository, txManager usecase.TxManager) *OrderService {
+	return &OrderService{orders: orders, outbox: outbox, txManager: txManager}
 }
 
 // GetOrder returns clientID's order, or errs.CodeNotFound if orderID does
@@ -69,6 +70,13 @@ func (s *OrderService) CancelOrder(ctx context.Context, clientID, orderID uuid.U
 		change := o.History[len(o.History)-1]
 		if err := s.orders.AppendStatusChange(ctx, o.ID, change); err != nil {
 			return fmt.Errorf("persist cancellation: %w", err)
+		}
+		event, err := newOrderCancelledEvent(o)
+		if err != nil {
+			return err
+		}
+		if err := s.outbox.Enqueue(ctx, event); err != nil {
+			return fmt.Errorf("enqueue order.cancelled event: %w", err)
 		}
 
 		result = o

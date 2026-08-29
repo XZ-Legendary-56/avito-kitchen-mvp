@@ -123,6 +123,27 @@ type IdempotencyRepository interface {
 	LinkOrder(ctx context.Context, clientID uuid.UUID, key string, orderID uuid.UUID) error
 }
 
+// OutboxEvent is this package's own narrow view of what it takes to enqueue
+// an event (PROMPT.md 6.5) — deliberately not usecase/outbox.Event: that
+// would make this package depend on another module's use-case layer just to
+// write one row (PROMPT.md 6.2). adapter/postgres's OutboxRepository is the
+// one place that knows both this shape and outbox.Event's.
+type OutboxEvent struct {
+	Type          string
+	AggregateType string
+	AggregateID   uuid.UUID
+	Payload       []byte
+	OccurredAt    time.Time
+}
+
+// OutboxRepository lets checkout and cancellation enqueue an event (PROMPT.md
+// 6.5: order.created, order.cancelled) inside the very same transaction as
+// the write that caused it — so an event is never recorded for an order that
+// didn't actually get created, and never silently skipped for one that did.
+type OutboxRepository interface {
+	Enqueue(ctx context.Context, e OutboxEvent) error
+}
+
 // CartRepository persists a client's cart as a whole. Save replaces the
 // entire item set atomically rather than patching individual rows — see
 // adapter/postgres's implementation for why that is the simpler and

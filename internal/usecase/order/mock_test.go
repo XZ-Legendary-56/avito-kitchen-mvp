@@ -278,6 +278,44 @@ func (mr *MockIdempotencyRepositoryMockRecorder) LinkOrder(ctx, clientID, key, o
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkOrder", reflect.TypeOf((*MockIdempotencyRepository)(nil).LinkOrder), ctx, clientID, key, orderID)
 }
 
+// MockOutboxRepository is a mock of OutboxRepository interface.
+type MockOutboxRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockOutboxRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockOutboxRepositoryMockRecorder is the mock recorder for MockOutboxRepository.
+type MockOutboxRepositoryMockRecorder struct {
+	mock *MockOutboxRepository
+}
+
+// NewMockOutboxRepository creates a new mock instance.
+func NewMockOutboxRepository(ctrl *gomock.Controller) *MockOutboxRepository {
+	mock := &MockOutboxRepository{ctrl: ctrl}
+	mock.recorder = &MockOutboxRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOutboxRepository) EXPECT() *MockOutboxRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Enqueue mocks base method.
+func (m *MockOutboxRepository) Enqueue(ctx context.Context, e order0.OutboxEvent) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Enqueue", ctx, e)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Enqueue indicates an expected call of Enqueue.
+func (mr *MockOutboxRepositoryMockRecorder) Enqueue(ctx, e any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Enqueue", reflect.TypeOf((*MockOutboxRepository)(nil).Enqueue), ctx, e)
+}
+
 // MockCartRepository is a mock of CartRepository interface.
 type MockCartRepository struct {
 	ctrl     *gomock.Controller

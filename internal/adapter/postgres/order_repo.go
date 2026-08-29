@@ -188,6 +188,37 @@ func (r *OrderRepository) AppendStatusChange(ctx context.Context, orderID uuid.U
 	return nil
 }
 
+// GetWebhookForOrder resolves orderID to its venue's webhook_url and
+// webhook_secret, for adapter/webhook.Publisher's own VenueWebhookLookup
+// port. ok is false when the order does not exist or its venue has no
+// webhook_url configured — "nothing to deliver to" is not this method's
+// error to report, the caller decides what that means.
+func (r *OrderRepository) GetWebhookForOrder(ctx context.Context, orderID uuid.UUID) (url string, secret string, ok bool, err error) {
+	q := QuerierFromContext(ctx, r.pool)
+
+	var webhookURL, webhookSecret *string
+	dbErr := q.QueryRow(ctx, `
+		SELECT v.webhook_url, v.webhook_secret
+		FROM orders o
+		JOIN venues v ON v.id = o.venue_id
+		WHERE o.id = $1
+	`, orderID).Scan(&webhookURL, &webhookSecret)
+	if errors.Is(dbErr, pgx.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if dbErr != nil {
+		return "", "", false, fmt.Errorf("query webhook for order %s: %w", orderID, dbErr)
+	}
+	if webhookURL == nil || *webhookURL == "" {
+		return "", "", false, nil
+	}
+	secret = ""
+	if webhookSecret != nil {
+		secret = *webhookSecret
+	}
+	return *webhookURL, secret, true, nil
+}
+
 // ListForVenue returns venueID's orders, newest first. It fetches matching
 // ids in one query, then reuses Get per order for items/history — a small,
 // bounded N+1 (limit caps it at 200) rather than the kind PROMPT.md 6.6

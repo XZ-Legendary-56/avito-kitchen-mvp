@@ -17,13 +17,14 @@ import (
 func TestGetOrder_Found(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
 	clientID, orderID := uuid.New(), uuid.New()
 	o := &domainorder.Order{ID: orderID, ClientID: clientID}
 	orders.EXPECT().Get(gomock.Any(), orderID).Return(o, nil)
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	got, err := svc.GetOrder(context.Background(), clientID, orderID)
 
 	require.NoError(t, err)
@@ -33,12 +34,13 @@ func TestGetOrder_Found(t *testing.T) {
 func TestGetOrder_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
 	orderID := uuid.New()
 	orders.EXPECT().Get(gomock.Any(), orderID).Return(nil, nil)
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	_, err := svc.GetOrder(context.Background(), uuid.New(), orderID)
 
 	require.Error(t, err)
@@ -50,13 +52,14 @@ func TestGetOrder_NotFound(t *testing.T) {
 func TestGetOrder_BelongsToDifferentClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
 	orderID := uuid.New()
 	o := &domainorder.Order{ID: orderID, ClientID: uuid.New()}
 	orders.EXPECT().Get(gomock.Any(), orderID).Return(o, nil)
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	_, err := svc.GetOrder(context.Background(), uuid.New(), orderID)
 
 	require.Error(t, err)
@@ -68,6 +71,7 @@ func TestGetOrder_BelongsToDifferentClient(t *testing.T) {
 func TestCancelOrder_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -80,8 +84,9 @@ func TestCancelOrder_Success(t *testing.T) {
 			assert.Equal(t, domainorder.ActorCustomer, change.Actor)
 			return nil
 		})
+	outboxRepo.EXPECT().Enqueue(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	got, err := svc.CancelOrder(context.Background(), clientID, orderID)
 
 	require.NoError(t, err)
@@ -91,13 +96,14 @@ func TestCancelOrder_Success(t *testing.T) {
 func TestCancelOrder_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
 	orderID := uuid.New()
 	orders.EXPECT().Get(gomock.Any(), orderID).Return(nil, nil)
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	_, err := svc.CancelOrder(context.Background(), uuid.New(), orderID)
 
 	require.Error(t, err)
@@ -109,6 +115,7 @@ func TestCancelOrder_NotFound(t *testing.T) {
 func TestCancelOrder_RejectedOnceCooking(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	orders := NewMockOrderRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -118,7 +125,7 @@ func TestCancelOrder_RejectedOnceCooking(t *testing.T) {
 	// AppendStatusChange must not be called: the state machine rejects the
 	// transition before there is anything to persist.
 
-	svc := order.NewOrderService(orders, tx)
+	svc := order.NewOrderService(orders, outboxRepo, tx)
 	_, err := svc.CancelOrder(context.Background(), clientID, orderID)
 
 	require.Error(t, err)

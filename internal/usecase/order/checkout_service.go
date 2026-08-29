@@ -32,11 +32,12 @@ type CheckoutService struct {
 	menuItems   MenuItemLookup
 	orders      OrderRepository
 	idempotency IdempotencyRepository
+	outbox      OutboxRepository
 	txManager   usecase.TxManager
 }
 
-func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, orders OrderRepository, idempotency IdempotencyRepository, txManager usecase.TxManager) *CheckoutService {
-	return &CheckoutService{carts: carts, venues: venues, menuItems: menuItems, orders: orders, idempotency: idempotency, txManager: txManager}
+func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, orders OrderRepository, idempotency IdempotencyRepository, outbox OutboxRepository, txManager usecase.TxManager) *CheckoutService {
+	return &CheckoutService{carts: carts, venues: venues, menuItems: menuItems, orders: orders, idempotency: idempotency, outbox: outbox, txManager: txManager}
 }
 
 // PlaceOrder turns clientID's cart into an order, clearing the cart on
@@ -149,6 +150,16 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 
 		if err := s.orders.Create(ctx, o); err != nil {
 			return fmt.Errorf("create order: %w", err)
+		}
+		// Enqueued in the same transaction as the order it describes
+		// (PROMPT.md 6.5): either both are committed together or neither is,
+		// so a webhook can never fire for an order that doesn't exist.
+		event, err := newOrderCreatedEvent(o)
+		if err != nil {
+			return err
+		}
+		if err := s.outbox.Enqueue(ctx, event); err != nil {
+			return fmt.Errorf("enqueue order.created event: %w", err)
 		}
 		if err := s.idempotency.LinkOrder(ctx, clientID, idempotencyKey, o.ID); err != nil {
 			return fmt.Errorf("link idempotency key: %w", err)

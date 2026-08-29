@@ -58,6 +58,8 @@ generate:
 	go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/order/mock_txmanager_test.go -package=order_test
 	go tool mockgen -source=internal/usecase/partner/ports.go -destination=internal/usecase/partner/mock_test.go -package=partner_test
 	go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/partner/mock_txmanager_test.go -package=partner_test
+	go tool mockgen -source=internal/usecase/outbox/ports.go -destination=internal/usecase/outbox/mock_test.go -package=outbox_test
+	go tool mockgen -source=internal/adapter/webhook/publisher.go -destination=internal/adapter/webhook/mock_test.go -package=webhook_test
 
 # Interim lint target for this stage: gofmt + go vet. Stage 12 replaces this
 # with golangci-lint once .golangci.yml (section 10.1 of PROMPT.md) is added.

@@ -18,6 +18,12 @@ type Config struct {
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	LogLevel        string        `env:"LOG_LEVEL" envDefault:"info"`
 
+	// OutboxPollInterval is how often the background dispatcher checks
+	// outbox_events for due work (PROMPT.md 6.5/7.4). 5s keeps webhook
+	// delivery close to real-time without polling so fast it is
+	// indistinguishable from a busy loop.
+	OutboxPollInterval time.Duration `env:"OUTBOX_POLL_INTERVAL" envDefault:"5s"`
+
 	DBHost     string `env:"DB_HOST,required"`
 	DBPort     int    `env:"DB_PORT" envDefault:"5432"`
 	DBUser     string `env:"DB_USER,required"`
@@ -52,6 +58,9 @@ func (c Config) Validate() error {
 	}
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("invalid SHUTDOWN_TIMEOUT %s: must be positive", c.ShutdownTimeout)
+	}
+	if c.OutboxPollInterval <= 0 {
+		return fmt.Errorf("invalid OUTBOX_POLL_INTERVAL %s: must be positive", c.OutboxPollInterval)
 	}
 	return nil
 }

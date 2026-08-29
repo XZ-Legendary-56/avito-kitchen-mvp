@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	adapterhttp "avito-kitchen/internal/adapter/http"
@@ -42,13 +43,21 @@ func run() error {
 	}
 	defer pool.Close()
 
-	router := adapterhttp.NewRouter(log, pool)
+	router, dispatcher := adapterhttp.NewRouter(log, pool)
 	srv := httpserver.New(fmt.Sprintf(":%d", cfg.HTTPPort), router, log)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		dispatcher.Run(ctx, cfg.OutboxPollInterval)
+	}()
 
 	log.Info("service starting", "port", cfg.HTTPPort)
 	if err := srv.Run(ctx, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("run http server: %w", err)
 	}
+	wg.Wait()
 
 	log.Info("service stopped gracefully")
 	return nil

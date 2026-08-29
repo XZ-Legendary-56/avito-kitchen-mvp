@@ -48,6 +48,7 @@ func TestPlaceOrder_EmptyCart(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -55,7 +56,7 @@ func TestPlaceOrder_EmptyCart(t *testing.T) {
 	expectFreshClaim(idem)
 	carts.EXPECT().Get(gomock.Any(), clientID).Return(nil, nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -71,6 +72,7 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -82,7 +84,7 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 	carts.EXPECT().Get(gomock.Any(), clientID).Return(cart, nil)
 	venues.EXPECT().Get(gomock.Any(), venueID).Return(nil, nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -98,6 +100,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -112,7 +115,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	venues.EXPECT().Get(gomock.Any(), venueID).Return(&venue, nil)
 	// LockForCheckout must not be called: the venue check fails first.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -128,6 +131,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -152,10 +156,11 @@ func TestPlaceOrder_Success(t *testing.T) {
 		assert.Equal(t, domainorder.StatusCreated, o.Status)
 		return nil
 	})
+	outboxRepo.EXPECT().Enqueue(gomock.Any(), gomock.Any()).Return(nil)
 	idem.EXPECT().LinkOrder(gomock.Any(), clientID, testIdempotencyKey, gomock.Any()).Return(nil)
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "no onions")
 
 	require.NoError(t, err)
@@ -170,6 +175,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -189,7 +195,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	// No DecrementStock, BumpMenuVersion, Create, LinkOrder or Clear: a
 	// failed checkout must have zero side effects.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -205,6 +211,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -223,7 +230,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -239,6 +246,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -258,7 +266,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	// DecrementStock must not be called: the order is rejected before
 	// anything is written.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -274,6 +282,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -294,10 +303,11 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	// BumpMenuVersion must not be called: nothing about the menu actually
 	// changed for an unlimited-stock item.
 	orders.EXPECT().Create(gomock.Any(), gomock.Any()).Return(nil)
+	outboxRepo.EXPECT().Enqueue(gomock.Any(), gomock.Any()).Return(nil)
 	idem.EXPECT().LinkOrder(gomock.Any(), clientID, testIdempotencyKey, gomock.Any()).Return(nil)
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
@@ -310,6 +320,7 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -325,7 +336,7 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	// because the cart it would need is typically already gone (the
 	// original, successful attempt cleared it).
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
@@ -340,6 +351,7 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	menuItems := NewMockMenuItemLookup(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
 
@@ -350,7 +362,7 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	// No OrderRepository.Get either: a hash mismatch is a conflict, not a
 	// lookup.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "a different address", "+70000000000", "")
 
 	require.Error(t, err)
