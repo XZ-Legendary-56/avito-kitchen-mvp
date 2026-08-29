@@ -214,7 +214,7 @@ func (h *Handlers) UpdateAvailability(ctx context.Context, request partnerapi.Up
 		return nil, err
 	}
 
-	resp := partnerapi.UpdateAvailabilityResponse{Items: make([]partnerapi.AvailabilityUpdate, len(items))}
+	resp := partnerapi.UpdateAvailabilityResult{Items: make([]partnerapi.AvailabilityUpdate, len(items))}
 	for i, mi := range items {
 		isAvailable := mi.IsAvailable
 		resp.Items[i] = partnerapi.AvailabilityUpdate{

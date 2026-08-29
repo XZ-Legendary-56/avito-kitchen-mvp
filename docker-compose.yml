@@ -61,6 +61,42 @@ services:
     depends_on:
       seed:
         condition: service_completed_successfully
+    healthcheck:
+      # venue-pasta-roma needs more than "the container started" — it needs
+      # /readyz to actually answer, which only happens once migrations and
+      # seed have landed. This is what lets its own depends_on below express
+      # PROMPT.md 8's "стартует после того, как api отвечает на /readyz"
+      # as a Compose-level guarantee, not just the app's own internal retry
+      # loop (see external/venue-pasta-roma's bootstrap package, which
+      # polls the same endpoint again anyway — belt and suspenders, since a
+      # healthcheck's own interval can lag the actual moment readiness
+      # flips).
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  venue-pasta-roma:
+    build:
+      context: ./external/venue-pasta-roma
+      dockerfile: Dockerfile
+    environment:
+      PLATFORM_BASE_URL: http://api:8080
+      # The API key belongs to the Pasta Roma partner from cmd/seed —
+      # venues.source='integration' for exactly this venue, and its menu is
+      # deliberately left empty by the seed (see seed.sql's own comment):
+      # this service is what's expected to fill it in, over the same
+      # partner API a real integrator would use.
+      PARTNER_API_KEY: demo_pasta_roma_2026
+      SELF_BASE_URL: http://venue-pasta-roma:8090
+      HTTP_PORT: "8090"
+      LOG_LEVEL: info
+    ports:
+      - "8090:8090"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:

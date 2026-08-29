@@ -170,7 +170,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/UpdateAvailabilityResponse"
+                $ref: "#/components/schemas/UpdateAvailabilityResult"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -722,7 +722,14 @@ components:
           items:
             $ref: "#/components/schemas/AvailabilityUpdate"
 
-    UpdateAvailabilityResponse:
+    # Named Result, not Response: oapi-codegen's client mode auto-generates a
+    # wrapper type per operation named <operationId>Response — for the
+    # updateAvailability operation that's UpdateAvailabilityResponse, which
+    # collided with this schema's Go type when external/venue-pasta-roma's
+    # client was generated (two types, same name, same package: a compile
+    # error). Every other schema in this file happens to end in a noun other
+    # than "Response", so this is the one rename that was actually needed.
+    UpdateAvailabilityResult:
       type: object
       required: [items]
       properties:

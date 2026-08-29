@@ -23,9 +23,11 @@ logs:
 
 build:
 	go build ./...
+	go build venue-pasta-roma/...
 
 test:
 	go test ./...
+	go test venue-pasta-roma/...
 
 # Needs Docker: spins up a real Postgres per test via testcontainers-go.
 # Gated behind the "integration" build tag so plain `make test` (and plain
@@ -53,6 +55,7 @@ seed:
 generate:
 	go tool oapi-codegen -config api/openapi/publicapi.cfg.yaml api/openapi/public.yaml
 	go tool oapi-codegen -config api/openapi/partnerapi.cfg.yaml api/openapi/partner.yaml
+	go tool oapi-codegen -config api/openapi/partnerclient.cfg.yaml api/openapi/partner.yaml
 	go tool mockgen -source=internal/usecase/catalog/ports.go -destination=internal/usecase/catalog/mock_test.go -package=catalog_test
 	go tool mockgen -source=internal/usecase/order/ports.go -destination=internal/usecase/order/mock_test.go -package=order_test
 	go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/order/mock_txmanager_test.go -package=order_test
@@ -69,3 +72,4 @@ lint:
 		echo "gofmt needs to be run on:"; echo "$$fmtout"; exit 1; \
 	fi
 	go vet ./...
+	go vet venue-pasta-roma/...
