@@ -29,7 +29,10 @@ func TestNew_SetsInitialState(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, order.StatusCreated, o.Status)
-	assert.Empty(t, o.History)
+	require.Len(t, o.History, 1, "creation itself must be recorded as the first history entry")
+	assert.Nil(t, o.History[0].From, "an order's creation has no prior status to record")
+	assert.Equal(t, order.StatusCreated, o.History[0].To)
+	assert.Equal(t, order.ActorCustomer, o.History[0].Actor)
 	assert.Equal(t, now, o.CreatedAt)
 	assert.Equal(t, now, o.UpdatedAt)
 }
@@ -54,12 +57,11 @@ func TestTransitionTo_AppendsHistoryAndAdvancesStatus(t *testing.T) {
 	assert.Equal(t, order.StatusConfirmed, o.Status)
 	assert.Equal(t, t1, o.UpdatedAt)
 	require.Len(t, o.History, 1)
-	assert.Equal(t, order.StatusChange{
-		From:      order.StatusCreated,
-		To:        order.StatusConfirmed,
-		Actor:     order.ActorVenue,
-		CreatedAt: t1,
-	}, o.History[0])
+	require.NotNil(t, o.History[0].From)
+	assert.Equal(t, order.StatusCreated, *o.History[0].From)
+	assert.Equal(t, order.StatusConfirmed, o.History[0].To)
+	assert.Equal(t, order.ActorVenue, o.History[0].Actor)
+	assert.Equal(t, t1, o.History[0].CreatedAt)
 }
 
 func TestTransitionTo_InvalidTransitionLeavesOrderUntouched(t *testing.T) {

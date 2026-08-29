@@ -5,6 +5,7 @@ package order
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -61,11 +62,58 @@ type VenueLookup interface {
 	BumpMenuVersion(ctx context.Context, id uuid.UUID) error
 }
 
-// OrderRepository persists a freshly placed order.
+// OrderRepository persists and retrieves orders.
 type OrderRepository interface {
-	// Create inserts the order, its items, and one order_status_history
-	// row recording the initial "created" transition (actor: customer).
+	// Create inserts the order, its items, and its History entries.
 	Create(ctx context.Context, o *domainorder.Order) error
+	// Get returns nil, nil if id does not exist. Used both to answer
+	// GetOrder and to replay an order on an idempotent checkout retry.
+	Get(ctx context.Context, id uuid.UUID) (*domainorder.Order, error)
+}
+
+// IdempotencyClaim is the result of trying to claim an idempotency key for
+// a checkout.
+type IdempotencyClaim struct {
+	// Claimed is true if this call now owns (clientID, key): no one has
+	// used it before. The caller should proceed with a normal checkout
+	// using the orderID it just passed to Claim.
+	Claimed bool
+	// HashMatches is only meaningful when !Claimed: does the stored
+	// request match the one being retried right now?
+	HashMatches bool
+	// OrderID is the order already linked to this key, when !Claimed &&
+	// HashMatches. Zero otherwise.
+	OrderID uuid.UUID
+}
+
+// IdempotencyRepository backs the Idempotency-Key mechanism (PROMPT.md
+// 5.2): a repeat of the same request must return the same order instead of
+// creating a second one, and the same key with a different request body is
+// a conflict.
+type IdempotencyRepository interface {
+	// Claim tries to atomically own (clientID, key), storing requestHash so
+	// a future retry can tell whether it is the same request. Must run
+	// inside the same transaction as the rest of checkout: if that
+	// transaction rolls back (the checkout failed for any reason), the
+	// claim rolls back with it, and the key is free to retry — a failed
+	// attempt must never permanently burn a key.
+	//
+	// order_id starts NULL and is filled in by LinkOrder once an order
+	// actually exists — idempotency_keys.order_id has a (non-deferrable)
+	// foreign key to orders, so it cannot be set to an order's id before
+	// that order's own INSERT has run, even inside the same transaction.
+	//
+	// expiresAt is recorded for a future cleanup job (PROMPT.md does not
+	// ask for one yet, so none exists) — nothing reads it back today, so
+	// an "expired" key still counts as used.
+	Claim(ctx context.Context, clientID uuid.UUID, key, requestHash string, expiresAt time.Time) (IdempotencyClaim, error)
+
+	// LinkOrder records that (clientID, key) resulted in orderID. Call it
+	// right before committing the transaction Claim ran in — a key must
+	// never be observable by another transaction as claimed but linked to
+	// nothing, since that is indistinguishable from "still being
+	// processed" and this project has no polling/waiting story for that.
+	LinkOrder(ctx context.Context, clientID uuid.UUID, key string, orderID uuid.UUID) error
 }
 
 // CartRepository persists a client's cart as a whole. Save replaces the

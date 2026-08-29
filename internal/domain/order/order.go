@@ -26,9 +26,13 @@ func (i Item) Total() int64 {
 }
 
 // StatusChange is one row of order_status_history: where a transition came
-// from, where it went, and who asked for it.
+// from, where it went, and who asked for it. From is nil for the very
+// first entry — an order's own creation is not a transition between two
+// statuses, it is arrival at the first one — matching
+// api/openapi/public.yaml's OrderStatusHistoryEntry.fromStatus, which is
+// nullable for exactly this reason.
 type StatusChange struct {
-	From      Status
+	From      *Status
 	To        Status
 	Actor     Actor
 	CreatedAt time.Time
@@ -54,8 +58,11 @@ type Order struct {
 	UpdatedAt       time.Time
 }
 
-// New builds a fresh order in StatusCreated. An order with no items is
-// rejected up front: it is never a valid aggregate, not just a rare one.
+// New builds a fresh order in StatusCreated, with one History entry
+// recording that creation (From: nil, To: StatusCreated, Actor:
+// ActorCustomer — placing an order is the customer's own action). An order
+// with no items is rejected up front: it is never a valid aggregate, not
+// just a rare one.
 func New(id, clientID, venueID uuid.UUID, items []Item, deliveryAddress, customerPhone, comment string, now time.Time) (*Order, error) {
 	if len(items) == 0 {
 		return nil, errs.New(errs.CodeCartEmpty, "order must have at least one item")
@@ -69,8 +76,11 @@ func New(id, clientID, venueID uuid.UUID, items []Item, deliveryAddress, custome
 		DeliveryAddress: deliveryAddress,
 		CustomerPhone:   customerPhone,
 		Comment:         comment,
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		History: []StatusChange{
+			{From: nil, To: StatusCreated, Actor: ActorCustomer, CreatedAt: now},
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
 	}, nil
 }
 
@@ -90,8 +100,12 @@ func (o *Order) TransitionTo(newStatus Status, actor Actor, now time.Time) error
 	if err := ValidateTransition(o.Status, newStatus); err != nil {
 		return err
 	}
+	// from is its own variable, not &o.Status, because o.Status is
+	// overwritten two lines down — a pointer straight into the field would
+	// have every past History entry silently change value with it.
+	from := o.Status
 	o.History = append(o.History, StatusChange{
-		From:      o.Status,
+		From:      &from,
 		To:        newStatus,
 		Actor:     actor,
 		CreatedAt: now,

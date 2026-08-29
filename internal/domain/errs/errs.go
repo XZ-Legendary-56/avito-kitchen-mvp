@@ -36,6 +36,11 @@ const (
 	CodePriceChanged             Code = "PRICE_CHANGED"
 	CodeMinOrderAmountNotReached Code = "MIN_ORDER_AMOUNT_NOT_REACHED"
 
+	// Idempotent checkout (PROMPT.md 5.2): the same Idempotency-Key was
+	// already used with a different request body. A matching body is not
+	// an error at all — it replays the original order instead.
+	CodeIdempotencyKeyConflict Code = "IDEMPOTENCY_KEY_CONFLICT"
+
 	// Generic REST cases, shared by both APIs (api/openapi/*.yaml ErrorCode
 	// description): not business rules of their own, but still routed
 	// through the same Code -> HTTP status mapping in adapter/http/httperr

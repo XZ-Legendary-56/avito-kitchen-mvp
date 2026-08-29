@@ -25,7 +25,8 @@ func statusFor(code errs.Code) int {
 		errs.CodePriceChanged,
 		errs.CodeCartVenueMismatch,
 		errs.CodeCartEmpty,
-		errs.CodeOrderInvalidStateTransition:
+		errs.CodeOrderInvalidStateTransition,
+		errs.CodeIdempotencyKeyConflict:
 		return http.StatusConflict
 	case errs.CodeMinOrderAmountNotReached:
 		return http.StatusUnprocessableEntity

@@ -12,8 +12,10 @@ package order_test
 import (
 	catalog "avito-kitchen/internal/domain/catalog"
 	order "avito-kitchen/internal/domain/order"
+	order0 "avito-kitchen/internal/usecase/order"
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
@@ -192,6 +194,74 @@ func (m *MockOrderRepository) Create(ctx context.Context, o *order.Order) error 
 func (mr *MockOrderRepositoryMockRecorder) Create(ctx, o any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOrderRepository)(nil).Create), ctx, o)
+}
+
+// Get mocks base method.
+func (m *MockOrderRepository) Get(ctx context.Context, id uuid.UUID) (*order.Order, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, id)
+	ret0, _ := ret[0].(*order.Order)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockOrderRepositoryMockRecorder) Get(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockOrderRepository)(nil).Get), ctx, id)
+}
+
+// MockIdempotencyRepository is a mock of IdempotencyRepository interface.
+type MockIdempotencyRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockIdempotencyRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockIdempotencyRepositoryMockRecorder is the mock recorder for MockIdempotencyRepository.
+type MockIdempotencyRepositoryMockRecorder struct {
+	mock *MockIdempotencyRepository
+}
+
+// NewMockIdempotencyRepository creates a new mock instance.
+func NewMockIdempotencyRepository(ctrl *gomock.Controller) *MockIdempotencyRepository {
+	mock := &MockIdempotencyRepository{ctrl: ctrl}
+	mock.recorder = &MockIdempotencyRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockIdempotencyRepository) EXPECT() *MockIdempotencyRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Claim mocks base method.
+func (m *MockIdempotencyRepository) Claim(ctx context.Context, clientID uuid.UUID, key, requestHash string, expiresAt time.Time) (order0.IdempotencyClaim, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Claim", ctx, clientID, key, requestHash, expiresAt)
+	ret0, _ := ret[0].(order0.IdempotencyClaim)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Claim indicates an expected call of Claim.
+func (mr *MockIdempotencyRepositoryMockRecorder) Claim(ctx, clientID, key, requestHash, expiresAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Claim", reflect.TypeOf((*MockIdempotencyRepository)(nil).Claim), ctx, clientID, key, requestHash, expiresAt)
+}
+
+// LinkOrder mocks base method.
+func (m *MockIdempotencyRepository) LinkOrder(ctx context.Context, clientID uuid.UUID, key string, orderID uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkOrder", ctx, clientID, key, orderID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkOrder indicates an expected call of LinkOrder.
+func (mr *MockIdempotencyRepositoryMockRecorder) LinkOrder(ctx, clientID, key, orderID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkOrder", reflect.TypeOf((*MockIdempotencyRepository)(nil).LinkOrder), ctx, clientID, key, orderID)
 }
 
 // MockCartRepository is a mock of CartRepository interface.
