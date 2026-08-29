@@ -15,7 +15,7 @@ const (
 	StatusDelivering Status = "delivering"
 	StatusDelivered  Status = "delivered"
 	StatusRejected   Status = "rejected"
-	StatusCancelled  Status = "canceled"
+	StatusCancelled  Status = "cancelled" //nolint:misspell // wire value fixed by the orders.status CHECK constraint and both OpenAPI specs (PROMPT.md 5.4/9); renaming it would break the schema and the generated clients, not just this constant
 )
 
 // Actor identifies who triggered a status change, for order_status_history.actor.
