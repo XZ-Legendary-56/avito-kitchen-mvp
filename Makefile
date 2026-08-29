@@ -1,4 +1,4 @@
-.PHONY: up down logs build test test-integration lint check migrate-up migrate-down migrate-status seed generate
+.PHONY: up down logs build test test-integration lint check migrate-up migrate-down migrate-status seed generate docs
 
 # Host-side defaults for talking to the Compose postgres from outside Docker
 # (make migrate-up, make seed). 5434 because 5432/5433 are commonly already
@@ -70,6 +70,15 @@ generate:
 lint:
 	golangci-lint run --build-tags=integration ./...
 	cd external/venue-pasta-roma && golangci-lint run --build-tags=integration ./...
+
+# Renders every .puml under docs/ (c4, cjm, erd) to PNG in docs/img/, via
+# the official plantuml/plantuml image — no local Java/PlantUML install
+# needed. -tpng picks PNG explicitly. -o must be an ABSOLUTE container path
+# (/docs/img): a relative -o is resolved per source file's own directory,
+# which would scatter output into docs/c4/img and docs/cjm/img instead of
+# one shared docs/img.
+docs:
+	docker run --rm -v "$(CURDIR)/docs:/docs" -w /docs plantuml/plantuml -tpng -o /docs/img c4 cjm erd.puml
 
 # PROMPT.md 11: lint + test + a check that generated code (oapi-codegen,
 # mockgen) is not stale. Regenerates first so a forgotten `make generate`

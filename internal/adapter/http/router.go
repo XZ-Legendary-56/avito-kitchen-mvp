@@ -34,6 +34,7 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool) (http.Handler, *outboxus
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logging(logger))
 	r.Use(middleware.Recover(logger))
+	r.Use(middleware.CORS)
 
 	r.Get("/healthz", handleHealthz)
 	r.Get("/readyz", handleReadyz(pool))

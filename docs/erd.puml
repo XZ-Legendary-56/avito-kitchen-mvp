@@ -92,6 +92,7 @@ entity "cart_items" as cartitems {
   --
   * cart_id : uuid <<FK>>
   * menu_item_id : uuid <<FK>>
+  rescue_offer_id : uuid <<FK>>
   * quantity : int
   * price_minor_snapshot : bigint
 }
@@ -166,6 +167,7 @@ venues     ||--o{ rescue
 venues     ||--o{ carts
 carts      ||--o{ cartitems
 items      ||--o{ cartitems
+rescue     |o--o{ cartitems
 venues     ||--o{ orders
 orders     ||--o{ orderitems
 items      ||--o{ orderitems

@@ -8,7 +8,14 @@ info:
     registration, no password, no JWT.
   version: "0.1.0"
 servers:
-  - url: /api/v1
+  # Absolute, not relative: Swagger UI resolves a relative server URL
+  # against its OWN page origin, and it runs in a separate container on a
+  # separate port (docker-compose.yml, swagger-ui service) from the API
+  # itself — a relative /api/v1 would make "Try it out" call swagger-ui's
+  # own nginx instead of the API. oapi-codegen ignores this field entirely
+  # (internal/adapter/http/router.go mounts the real path itself), so this
+  # only affects tooling, never the running server's actual routing.
+  - url: http://localhost:8080/api/v1
 tags:
   - name: venues
   - name: rescue

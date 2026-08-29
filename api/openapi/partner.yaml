@@ -10,7 +10,9 @@ info:
     requirement for customers.
   version: "0.1.0"
 servers:
-  - url: /api/v1/partner
+  # See public.yaml's servers comment: absolute on purpose, for Swagger UI
+  # running on its own port.
+  - url: http://localhost:8080/api/v1/partner
 tags:
   - name: venue
   - name: menu
