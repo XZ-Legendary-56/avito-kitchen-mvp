@@ -150,3 +150,33 @@ func (r *OrderRepository) Get(ctx context.Context, id uuid.UUID) (*domainorder.O
 
 	return &o, nil
 }
+
+// AppendStatusChange updates orders.status/updated_at and inserts the
+// matching order_status_history row, from one already-applied
+// domainorder.StatusChange.
+func (r *OrderRepository) AppendStatusChange(ctx context.Context, orderID uuid.UUID, change domainorder.StatusChange) error {
+	q := QuerierFromContext(ctx, r.pool)
+
+	tag, err := q.Exec(ctx, `
+		UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3
+	`, string(change.To), change.CreatedAt, orderID)
+	if err != nil {
+		return fmt.Errorf("update order status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("order %s not found when appending status change", orderID)
+	}
+
+	var fromStatus *string
+	if change.From != nil {
+		s := string(*change.From)
+		fromStatus = &s
+	}
+	if _, err := q.Exec(ctx, `
+		INSERT INTO order_status_history (id, order_id, from_status, to_status, actor, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, uuid.New(), orderID, fromStatus, string(change.To), string(change.Actor), change.CreatedAt); err != nil {
+		return fmt.Errorf("insert order status history: %w", err)
+	}
+	return nil
+}

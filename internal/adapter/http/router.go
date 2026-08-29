@@ -45,11 +45,15 @@ func newPublicAPIRouter(pool *pgxpool.Pool) http.Handler {
 	venues := postgres.NewVenueRepository(pool)
 	menus := postgres.NewMenuRepository(pool)
 	carts := postgres.NewCartRepository(pool)
+	orders := postgres.NewOrderRepository(pool)
+	idempotency := postgres.NewIdempotencyRepository(pool)
 	txManager := postgres.NewTxManager(pool)
 
 	handlers := &public.Handlers{
-		Catalog: catalogusecase.NewService(venues, menus),
-		Cart:    orderusecase.NewCartService(carts, menus, txManager),
+		Catalog:  catalogusecase.NewService(venues, menus),
+		Cart:     orderusecase.NewCartService(carts, menus, txManager),
+		Checkout: orderusecase.NewCheckoutService(carts, venues, menus, orders, idempotency, txManager),
+		Orders:   orderusecase.NewOrderService(orders, txManager),
 	}
 
 	strictHandler := publicapi.NewStrictHandlerWithOptions(handlers, nil, publicapi.StrictHTTPServerOptions{

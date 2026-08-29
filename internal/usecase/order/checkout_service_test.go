@@ -56,7 +56,7 @@ func TestPlaceOrder_EmptyCart(t *testing.T) {
 	carts.EXPECT().Get(gomock.Any(), clientID).Return(nil, nil)
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -83,7 +83,7 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 	venues.EXPECT().Get(gomock.Any(), venueID).Return(nil, nil)
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -113,7 +113,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	// LockForCheckout must not be called: the venue check fails first.
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -156,9 +156,10 @@ func TestPlaceOrder_Success(t *testing.T) {
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	o, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "no onions")
+	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "no onions")
 
 	require.NoError(t, err)
+	assert.False(t, replayed, "a brand-new order must not be reported as a replay")
 	assert.Equal(t, int64(20000), o.TotalMinor())
 }
 
@@ -189,7 +190,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	// failed checkout must have zero side effects.
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -223,7 +224,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -258,7 +259,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	// anything is written.
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -297,7 +298,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
 }
@@ -325,9 +326,10 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	// original, successful attempt cleared it).
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	o, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
+	assert.True(t, replayed, "a replayed order must be reported as such, for the HTTP layer to answer 200 instead of 201")
 	assert.Same(t, existingOrder, o)
 }
 
@@ -349,7 +351,7 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	// lookup.
 
 	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, tx)
-	_, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "a different address", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "a different address", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)

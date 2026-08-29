@@ -12,11 +12,13 @@ import (
 
 // Handlers implements publicapi.StrictServerInterface. Every method either
 // maps a request to a use-case call and its result to a wire type, or —
-// for the four operations this stage does not build (orders, rescue) —
-// reports that plainly rather than pretending to handle them.
+// for the one operation this stage does not build (the rescue feed) —
+// reports that plainly rather than pretending to handle it.
 type Handlers struct {
-	Catalog *catalogusecase.Service
-	Cart    *orderusecase.CartService
+	Catalog  *catalogusecase.Service
+	Cart     *orderusecase.CartService
+	Checkout *orderusecase.CheckoutService
+	Orders   *orderusecase.OrderService
 }
 
 var _ publicapi.StrictServerInterface = (*Handlers)(nil)
@@ -129,27 +131,57 @@ func (h *Handlers) RemoveCartItem(ctx context.Context, request publicapi.RemoveC
 	return publicapi.RemoveCartItem200JSONResponse(toCart(view)), nil
 }
 
-// errNotImplementedYet is returned by every operation this stage does not
-// build (checkout, order status/cancel, the rescue feed). PROMPT.md's own
-// stage plan (section 13) puts order placement at stage 7 and rescue
-// offers after stage 10 — the strict server interface still requires a
-// method for every path in the spec, so these exist to say "not yet"
-// honestly instead of faking a response. httperr.Write reports them as a
-// plain 500 for now; there is nothing more specific to say about a route
-// that legitimately has no implementation.
+func (h *Handlers) CreateOrder(ctx context.Context, request publicapi.CreateOrderRequestObject) (publicapi.CreateOrderResponseObject, error) {
+	if request.Body == nil {
+		return nil, errs.New(errs.CodeValidationError, "request body is required")
+	}
+	if request.Body.DeliveryAddress == "" {
+		return nil, errs.New(errs.CodeValidationError, "deliveryAddress must not be empty")
+	}
+	if request.Body.CustomerPhone == "" {
+		return nil, errs.New(errs.CodeValidationError, "customerPhone must not be empty")
+	}
+	comment := ""
+	if request.Body.Comment != nil {
+		comment = *request.Body.Comment
+	}
+
+	o, replayed, err := h.Checkout.PlaceOrder(ctx, request.Params.XClientId, request.Params.IdempotencyKey,
+		request.Body.DeliveryAddress, request.Body.CustomerPhone, comment)
+	if err != nil {
+		return nil, err
+	}
+
+	if replayed {
+		return publicapi.CreateOrder200JSONResponse(toOrder(o)), nil
+	}
+	return publicapi.CreateOrder201JSONResponse(toOrder(o)), nil
+}
+
+func (h *Handlers) GetOrder(ctx context.Context, request publicapi.GetOrderRequestObject) (publicapi.GetOrderResponseObject, error) {
+	o, err := h.Orders.GetOrder(ctx, request.Params.XClientId, request.OrderId)
+	if err != nil {
+		return nil, err
+	}
+	return publicapi.GetOrder200JSONResponse(toOrder(o)), nil
+}
+
+func (h *Handlers) CancelOrder(ctx context.Context, request publicapi.CancelOrderRequestObject) (publicapi.CancelOrderResponseObject, error) {
+	o, err := h.Orders.CancelOrder(ctx, request.Params.XClientId, request.OrderId)
+	if err != nil {
+		return nil, err
+	}
+	return publicapi.CancelOrder200JSONResponse(toOrder(o)), nil
+}
+
+// errNotImplementedYet is returned by the one operation this stage does
+// not build: the rescue feed. PROMPT.md's own stage plan (section 13)
+// defers rescue offers until after stage 10 — the strict server interface
+// still requires a method for every path in the spec, so this exists to
+// say "not yet" honestly instead of faking a response. httperr.Write
+// reports it as a plain 500 for now; there is nothing more specific to say
+// about a route that legitimately has no implementation.
 var errNotImplementedYet = errors.New("not implemented until a later stage of this project")
-
-func (h *Handlers) CreateOrder(context.Context, publicapi.CreateOrderRequestObject) (publicapi.CreateOrderResponseObject, error) {
-	return nil, errNotImplementedYet
-}
-
-func (h *Handlers) GetOrder(context.Context, publicapi.GetOrderRequestObject) (publicapi.GetOrderResponseObject, error) {
-	return nil, errNotImplementedYet
-}
-
-func (h *Handlers) CancelOrder(context.Context, publicapi.CancelOrderRequestObject) (publicapi.CancelOrderResponseObject, error) {
-	return nil, errNotImplementedYet
-}
 
 func (h *Handlers) ListRescueOffers(context.Context, publicapi.ListRescueOffersRequestObject) (publicapi.ListRescueOffersResponseObject, error) {
 	return nil, errNotImplementedYet

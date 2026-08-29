@@ -66,9 +66,16 @@ type VenueLookup interface {
 type OrderRepository interface {
 	// Create inserts the order, its items, and its History entries.
 	Create(ctx context.Context, o *domainorder.Order) error
-	// Get returns nil, nil if id does not exist. Used both to answer
-	// GetOrder and to replay an order on an idempotent checkout retry.
+	// Get returns nil, nil if id does not exist. Used to answer GetOrder,
+	// to replay an order on an idempotent checkout retry, and as the read
+	// half of OrderService.CancelOrder.
 	Get(ctx context.Context, id uuid.UUID) (*domainorder.Order, error)
+	// AppendStatusChange persists one status transition already applied to
+	// an in-memory Order (via Order.TransitionTo/Cancel/Reject): it updates
+	// orders.status/updated_at and inserts the matching
+	// order_status_history row from change. Call it with the last element
+	// of Order.History right after a transition succeeds.
+	AppendStatusChange(ctx context.Context, orderID uuid.UUID, change domainorder.StatusChange) error
 }
 
 // IdempotencyClaim is the result of trying to claim an idempotency key for

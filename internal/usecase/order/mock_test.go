@@ -182,6 +182,20 @@ func (m *MockOrderRepository) EXPECT() *MockOrderRepositoryMockRecorder {
 	return m.recorder
 }
 
+// AppendStatusChange mocks base method.
+func (m *MockOrderRepository) AppendStatusChange(ctx context.Context, orderID uuid.UUID, change order.StatusChange) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AppendStatusChange", ctx, orderID, change)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AppendStatusChange indicates an expected call of AppendStatusChange.
+func (mr *MockOrderRepositoryMockRecorder) AppendStatusChange(ctx, orderID, change any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendStatusChange", reflect.TypeOf((*MockOrderRepository)(nil).AppendStatusChange), ctx, orderID, change)
+}
+
 // Create mocks base method.
 func (m *MockOrderRepository) Create(ctx context.Context, o *order.Order) error {
 	m.ctrl.T.Helper()

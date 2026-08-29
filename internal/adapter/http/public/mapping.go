@@ -163,3 +163,59 @@ func toCartItem(item domainorder.CartItem, mi domaincatalog.MenuItem) publicapi.
 		IsAvailable: mi.EnsureAvailable(item.Quantity) == nil,
 	}
 }
+
+func toOrder(o *domainorder.Order) publicapi.Order {
+	out := publicapi.Order{
+		Id:              o.ID,
+		VenueId:         o.VenueID,
+		Status:          publicapi.OrderStatus(o.Status),
+		DeliveryAddress: o.DeliveryAddress,
+		CustomerPhone:   o.CustomerPhone,
+		EtaMinutes:      o.ETAMinutes,
+		Total:           money(o.TotalMinor()),
+		CreatedAt:       o.CreatedAt,
+		UpdatedAt:       o.UpdatedAt,
+	}
+	if o.Comment != "" {
+		out.Comment = &o.Comment
+	}
+	if o.RejectionReason != "" {
+		out.RejectionReason = &o.RejectionReason
+	}
+
+	out.Items = make([]publicapi.OrderItem, len(o.Items))
+	for i, item := range o.Items {
+		out.Items[i] = toOrderItem(item)
+	}
+
+	out.StatusHistory = make([]publicapi.OrderStatusHistoryEntry, len(o.History))
+	for i, change := range o.History {
+		out.StatusHistory[i] = toOrderStatusHistoryEntry(change)
+	}
+
+	return out
+}
+
+func toOrderItem(item domainorder.Item) publicapi.OrderItem {
+	return publicapi.OrderItem{
+		MenuItemId:    item.MenuItemID,
+		Name:          item.NameSnapshot,
+		Quantity:      item.Quantity,
+		UnitPrice:     money(item.UnitPriceMinor),
+		LineTotal:     money(item.Total()),
+		RescueOfferId: item.RescueOfferID,
+	}
+}
+
+func toOrderStatusHistoryEntry(change domainorder.StatusChange) publicapi.OrderStatusHistoryEntry {
+	out := publicapi.OrderStatusHistoryEntry{
+		ToStatus:  publicapi.OrderStatus(change.To),
+		Actor:     publicapi.OrderStatusHistoryEntryActor(change.Actor),
+		CreatedAt: change.CreatedAt,
+	}
+	if change.From != nil {
+		from := publicapi.OrderStatus(*change.From)
+		out.FromStatus = &from
+	}
+	return out
+}

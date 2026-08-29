@@ -52,10 +52,15 @@ func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems Menu
 // original attempt already succeeded and cleared it — reading the cart
 // first would misreport that as CART_EMPTY instead of replaying the
 // original order.
-func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, idempotencyKey, deliveryAddress, customerPhone, comment string) (*domainorder.Order, error) {
+//
+// replayed reports whether this call returned an order created by an
+// earlier request (true) or created one just now (false) — the public API
+// answers 200 vs 201 based on it (api/openapi/public.yaml createOrder).
+func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, idempotencyKey, deliveryAddress, customerPhone, comment string) (*domainorder.Order, bool, error) {
 	requestHash := domainorder.HashCheckoutRequest(deliveryAddress, customerPhone, comment)
 
 	var placed *domainorder.Order
+	var wasReplayed bool
 	err := s.txManager.WithinTx(ctx, func(ctx context.Context) error {
 		claim, err := s.idempotency.Claim(ctx, clientID, idempotencyKey, requestHash, time.Now().Add(idempotencyKeyTTL))
 		if err != nil {
@@ -74,6 +79,7 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 				return fmt.Errorf("idempotency key %s references missing order %s", idempotencyKey, claim.OrderID)
 			}
 			placed = existing
+			wasReplayed = true
 			return nil
 		}
 
@@ -155,9 +161,9 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return placed, nil
+	return placed, wasReplayed, nil
 }
 
 // buildCheckoutLine turns one cart line into a domainorder.CheckoutLine,

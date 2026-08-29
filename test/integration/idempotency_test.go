@@ -43,11 +43,13 @@ func TestPlaceOrder_IdempotentRetry_ReturnsSameOrderWithoutDuplicating(t *testin
 	)
 
 	const key = "retry-key"
-	first, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
+	first, replayed, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
 	require.NoError(t, err)
+	assert.False(t, replayed)
 
-	second, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
+	second, replayed, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
 	require.NoError(t, err, "a retry with the same key and body must succeed even though the cart is now empty")
+	assert.True(t, replayed)
 	assert.Equal(t, first.ID, second.ID, "the retry must return the original order, not create a new one")
 
 	var orderCount int
@@ -82,10 +84,10 @@ func TestPlaceOrder_SameKeyDifferentBody_ReturnsConflict(t *testing.T) {
 	)
 
 	const key = "conflict-key"
-	_, err := svc.PlaceOrder(ctx, clientID, key, "first address", "+70000000000", "")
+	_, _, err := svc.PlaceOrder(ctx, clientID, key, "first address", "+70000000000", "")
 	require.NoError(t, err)
 
-	_, err = svc.PlaceOrder(ctx, clientID, key, "a completely different address", "+70000000000", "")
+	_, _, err = svc.PlaceOrder(ctx, clientID, key, "a completely different address", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
@@ -134,7 +136,7 @@ func TestPlaceOrder_ConcurrentDuplicateSubmissions_OnlyOneOrderCreated(t *testin
 	place := func() {
 		atGate.Done()
 		<-start
-		o, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
+		o, _, err := svc.PlaceOrder(ctx, clientID, key, "addr", "+70000000000", "")
 		results <- placement{order: o, err: err}
 	}
 	go place()

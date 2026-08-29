@@ -107,7 +107,7 @@ func TestPlaceOrder_ConcurrentCheckoutsOnLastUnit(t *testing.T) {
 		atGate.Done()
 		<-start
 		t0 := time.Now()
-		o, err := svc.PlaceOrder(ctx, clientID, "race-test-"+clientID.String(), "addr", "+70000000000", "")
+		o, _, err := svc.PlaceOrder(ctx, clientID, "race-test-"+clientID.String(), "addr", "+70000000000", "")
 		results <- placement{order: o, err: err, elapsed: time.Since(t0)}
 	}
 
