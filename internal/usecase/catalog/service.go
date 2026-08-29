@@ -14,15 +14,16 @@ import (
 // Service implements the catalog use-cases on top of the ports declared in
 // ports.go.
 type Service struct {
-	venues VenueRepository
-	menus  MenuRepository
+	venues       VenueRepository
+	menus        MenuRepository
+	rescueOffers RescueOfferRepository
 }
 
 // NewService builds a Service. now is not a dependency here: each method
 // takes its own snapshot of time.Now() so a single request filters and
 // displays against one consistent instant.
-func NewService(venues VenueRepository, menus MenuRepository) *Service {
-	return &Service{venues: venues, menus: menus}
+func NewService(venues VenueRepository, menus MenuRepository, rescueOffers RescueOfferRepository) *Service {
+	return &Service{venues: venues, menus: menus, rescueOffers: rescueOffers}
 }
 
 // VenueView is a venue plus the display fields computed from it and "now"
@@ -105,7 +106,64 @@ func (s *Service) GetMenu(ctx context.Context, venueID uuid.UUID, ifNoneMatch st
 	if err != nil {
 		return MenuResult{}, fmt.Errorf("get menu: %w", err)
 	}
+	if err := s.attachRescueOffers(ctx, menu, time.Now()); err != nil {
+		return MenuResult{}, err
+	}
 	return MenuResult{Menu: menu, ETag: etag}, nil
+}
+
+// attachRescueOffers sets MenuItem.RescueOffer for every item in menu that
+// currently has one (PROMPT.md 5.5), in a single batched lookup rather than
+// one query per item (PROMPT.md 6.6). An item that is stopped or out of
+// stock never shows one, even if its window and remaining count are
+// otherwise fine — PROMPT.md 5.5's own condition table treats "the item
+// itself is not available" as part of what makes an offer usable at all,
+// and showing a discount badge next to an item already flagged unavailable
+// would just contradict itself on the same page.
+func (s *Service) attachRescueOffers(ctx context.Context, menu Menu, now time.Time) error {
+	var ids []uuid.UUID
+	for _, cat := range menu.Categories {
+		for _, mi := range cat.Items {
+			ids = append(ids, mi.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	offers, err := s.rescueOffers.GetActiveForItems(ctx, ids, now)
+	if err != nil {
+		return fmt.Errorf("look up rescue offers: %w", err)
+	}
+	if len(offers) == 0 {
+		return nil
+	}
+
+	for ci := range menu.Categories {
+		items := menu.Categories[ci].Items
+		for ii := range items {
+			if !items[ii].IsAvailable {
+				continue
+			}
+			if offer, ok := offers[items[ii].ID]; ok {
+				offer := offer
+				items[ii].RescueOffer = &offer
+			}
+		}
+	}
+	return nil
+}
+
+// ListRescueOffers is GET /rescue (PROMPT.md 5.1 item 7): the cross-venue
+// "spend it before it's gone" feed, soonest-closing first. Activity and
+// eligibility (all four of PROMPT.md 5.5's conditions) are the repository's
+// own job, same reasoning as VenueRepository.List's OnlyOpen filter.
+func (s *Service) ListRescueOffers(ctx context.Context, cursor string, limit int) (RescueOfferFeedPage, error) {
+	page, err := s.rescueOffers.ListActiveFeed(ctx, cursor, limit, time.Now())
+	if err != nil {
+		return RescueOfferFeedPage{}, fmt.Errorf("list rescue offers: %w", err)
+	}
+	return page, nil
 }
 
 // BuildETag derives an ETag from venue_id and menu_version, per PROMPT.md

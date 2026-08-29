@@ -82,6 +82,7 @@ func TestPlaceOrder_ConcurrentCheckoutsOnLastUnit(t *testing.T) {
 		pgadapter.NewCartRepository(pool),
 		pgadapter.NewVenueRepository(pool),
 		&delayingMenuItemLookup{real: pgadapter.NewMenuRepository(pool), delay: checkoutHoldDelay},
+		pgadapter.NewRescueOfferRepository(pool),
 		pgadapter.NewOrderRepository(pool),
 		pgadapter.NewIdempotencyRepository(pool),
 		pgadapter.NewOutboxRepository(pool),

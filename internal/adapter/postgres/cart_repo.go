@@ -28,7 +28,7 @@ func (r *CartRepository) Get(ctx context.Context, clientID uuid.UUID) (*domainor
 	q := QuerierFromContext(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
-		SELECT c.venue_id, ci.id, ci.menu_item_id, ci.quantity, ci.price_minor_snapshot
+		SELECT c.venue_id, ci.id, ci.menu_item_id, ci.quantity, ci.price_minor_snapshot, ci.rescue_offer_id
 		FROM carts c
 		LEFT JOIN cart_items ci ON ci.cart_id = c.id
 		WHERE c.client_id = $1
@@ -44,7 +44,8 @@ func (r *CartRepository) Get(ctx context.Context, clientID uuid.UUID) (*domainor
 		var itemID, menuItemID *uuid.UUID
 		var quantity *int
 		var priceMinor *int64
-		if err := rows.Scan(&venueID, &itemID, &menuItemID, &quantity, &priceMinor); err != nil {
+		var rescueOfferID *uuid.UUID
+		if err := rows.Scan(&venueID, &itemID, &menuItemID, &quantity, &priceMinor, &rescueOfferID); err != nil {
 			return nil, fmt.Errorf("scan cart row: %w", err)
 		}
 		if cart == nil {
@@ -56,6 +57,7 @@ func (r *CartRepository) Get(ctx context.Context, clientID uuid.UUID) (*domainor
 				MenuItemID:         *menuItemID,
 				Quantity:           *quantity,
 				PriceMinorSnapshot: *priceMinor,
+				RescueOfferID:      rescueOfferID,
 			})
 		}
 	}
@@ -88,9 +90,9 @@ func (r *CartRepository) Save(ctx context.Context, cart *domainorder.Cart) error
 
 	for _, item := range cart.Items {
 		if _, err := q.Exec(ctx, `
-			INSERT INTO cart_items (id, cart_id, menu_item_id, quantity, price_minor_snapshot)
-			VALUES ($1, $2, $3, $4, $5)
-		`, item.ID, cartID, item.MenuItemID, item.Quantity, item.PriceMinorSnapshot); err != nil {
+			INSERT INTO cart_items (id, cart_id, menu_item_id, quantity, price_minor_snapshot, rescue_offer_id)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, item.ID, cartID, item.MenuItemID, item.Quantity, item.PriceMinorSnapshot, item.RescueOfferID); err != nil {
 			return fmt.Errorf("insert cart item: %w", err)
 		}
 	}

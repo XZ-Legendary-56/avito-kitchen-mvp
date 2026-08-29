@@ -19,9 +19,10 @@ import (
 // "security: ApiKeyAuth" is enforced by that middleware, not by the spec's
 // request shape.
 type Handlers struct {
-	Venues *partnerusecase.VenueService
-	Menus  *partnerusecase.MenuService
-	Orders *partnerusecase.OrderService
+	Venues       *partnerusecase.VenueService
+	Menus        *partnerusecase.MenuService
+	Orders       *partnerusecase.OrderService
+	RescueOffers *partnerusecase.RescueOfferService
 }
 
 var _ partnerapi.StrictServerInterface = (*Handlers)(nil)
@@ -304,21 +305,54 @@ func (h *Handlers) AdvanceOrderStatus(ctx context.Context, request partnerapi.Ad
 	return partnerapi.AdvanceOrderStatus200JSONResponse(toPartnerOrder(o)), nil
 }
 
-// errNotImplementedYet is returned by the three rescue-offer operations
-// this stage does not build. PROMPT.md's own stage plan (section 13)
-// defers rescue offers until after stage 10 — the strict server interface
-// still requires a method for every path in the spec, so these exist to
-// say "not yet" honestly instead of faking a response.
-var errNotImplementedYet = errors.New("not implemented until a later stage of this project")
+func (h *Handlers) ListPartnerRescueOffers(ctx context.Context, request partnerapi.ListPartnerRescueOffersRequestObject) (partnerapi.ListPartnerRescueOffersResponseObject, error) {
+	venueID, err := venueIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	activeOnly := request.Params.ActiveOnly != nil && *request.Params.ActiveOnly
 
-func (h *Handlers) ListPartnerRescueOffers(context.Context, partnerapi.ListPartnerRescueOffersRequestObject) (partnerapi.ListPartnerRescueOffersResponseObject, error) {
-	return nil, errNotImplementedYet
+	offers, err := h.RescueOffers.ListOffers(ctx, venueID, activeOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]partnerapi.RescueOffer, len(offers))
+	for i, o := range offers {
+		out[i] = toPartnerRescueOffer(o)
+	}
+	return partnerapi.ListPartnerRescueOffers200JSONResponse(out), nil
 }
 
-func (h *Handlers) CreateRescueOffer(context.Context, partnerapi.CreateRescueOfferRequestObject) (partnerapi.CreateRescueOfferResponseObject, error) {
-	return nil, errNotImplementedYet
+func (h *Handlers) CreateRescueOffer(ctx context.Context, request partnerapi.CreateRescueOfferRequestObject) (partnerapi.CreateRescueOfferResponseObject, error) {
+	venueID, err := venueIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		return nil, errs.New(errs.CodeValidationError, "request body is required")
+	}
+
+	offer, err := h.RescueOffers.CreateOffer(ctx, venueID, partnerusecase.NewRescueOfferRequest{
+		MenuItemID:      request.Body.MenuItemId,
+		DiscountPercent: request.Body.DiscountPercent,
+		Quantity:        request.Body.Quantity,
+		StartsAt:        request.Body.StartsAt,
+		EndsAt:          request.Body.EndsAt,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return partnerapi.CreateRescueOffer201JSONResponse(toPartnerRescueOffer(*offer)), nil
 }
 
-func (h *Handlers) CancelRescueOffer(context.Context, partnerapi.CancelRescueOfferRequestObject) (partnerapi.CancelRescueOfferResponseObject, error) {
-	return nil, errNotImplementedYet
+func (h *Handlers) CancelRescueOffer(ctx context.Context, request partnerapi.CancelRescueOfferRequestObject) (partnerapi.CancelRescueOfferResponseObject, error) {
+	venueID, err := venueIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.RescueOffers.CancelOffer(ctx, venueID, request.OfferId); err != nil {
+		return nil, err
+	}
+	return partnerapi.CancelRescueOffer204Response{}, nil
 }

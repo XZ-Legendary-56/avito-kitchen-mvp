@@ -143,6 +143,117 @@ func TestCheckout_InsufficientStockAlone(t *testing.T) {
 	assert.Equal(t, 1, domainErr.Details[0]["available"])
 }
 
+// TestCheckout_RescuePartialCoverage_SplitsIntoTwoLines is PROMPT.md 5.5's
+// own mandated test: ordering more than a rescue offer still has left must
+// succeed, not fail — the order simply ends up with two order_items, one at
+// the discounted price for whatever the offer could still cover, one at
+// full price for the rest.
+func TestCheckout_RescuePartialCoverage_SplitsIntoTwoLines(t *testing.T) {
+	offerID := uuid.New()
+	line := order.CheckoutLine{
+		MenuItemID:           uuid.New(),
+		Name:                 "Margherita",
+		Quantity:             5,
+		UnitPriceMinor:       45900,
+		RescueOfferID:        &offerID,
+		RescueQuantity:       3,
+		RescueUnitPriceMinor: 27540,
+	}
+
+	o, err := order.Checkout(uuid.New(), uuid.New(), uuid.New(), []order.CheckoutLine{line}, "addr", "+70000000000", "", time.Now())
+
+	require.NoError(t, err)
+	require.Len(t, o.Items, 2, "a partially covered rescue line must become two order_items")
+
+	var rescueItem, fullPriceItem *order.Item
+	for i := range o.Items {
+		if o.Items[i].RescueOfferID != nil {
+			rescueItem = &o.Items[i]
+		} else {
+			fullPriceItem = &o.Items[i]
+		}
+	}
+	require.NotNil(t, rescueItem)
+	require.NotNil(t, fullPriceItem)
+	assert.Equal(t, offerID, *rescueItem.RescueOfferID)
+	assert.Equal(t, 3, rescueItem.Quantity)
+	assert.Equal(t, int64(27540), rescueItem.UnitPriceMinor)
+	assert.Equal(t, 2, fullPriceItem.Quantity)
+	assert.Equal(t, int64(45900), fullPriceItem.UnitPriceMinor)
+	assert.Equal(t, int64(3*27540+2*45900), o.TotalMinor())
+}
+
+// TestCheckout_RescueFullCoverage_SingleDiscountedLine covers the other,
+// more common case: the offer can cover the whole line, so there is
+// nothing to split — one order_item, fully at the discounted price.
+func TestCheckout_RescueFullCoverage_SingleDiscountedLine(t *testing.T) {
+	offerID := uuid.New()
+	line := order.CheckoutLine{
+		MenuItemID:           uuid.New(),
+		Name:                 "Margherita",
+		Quantity:             2,
+		UnitPriceMinor:       45900,
+		RescueOfferID:        &offerID,
+		RescueQuantity:       2,
+		RescueUnitPriceMinor: 27540,
+	}
+
+	o, err := order.Checkout(uuid.New(), uuid.New(), uuid.New(), []order.CheckoutLine{line}, "addr", "+70000000000", "", time.Now())
+
+	require.NoError(t, err)
+	require.Len(t, o.Items, 1)
+	assert.Equal(t, offerID, *o.Items[0].RescueOfferID)
+	assert.Equal(t, 2, o.Items[0].Quantity)
+	assert.Equal(t, int64(27540), o.Items[0].UnitPriceMinor)
+}
+
+// TestCheckout_RescueOfferExpired_BlocksTheWholeOrder covers PROMPT.md
+// 5.5's other rescue conflict: the offer's own window ended entirely
+// (distinct from just running low), which the use-case reports as Err
+// exactly like any other per-line conflict — Checkout must still fail the
+// whole order, not silently drop the discount.
+func TestCheckout_RescueOfferExpired_BlocksTheWholeOrder(t *testing.T) {
+	lines := []order.CheckoutLine{
+		okLine("Cola", 1, 15900),
+		{
+			MenuItemID: uuid.New(),
+			Name:       "Margherita",
+			Quantity:   2,
+			Err: errs.NewWithDetails(errs.CodeRescueOfferExpired, "the rescue offer for \"Margherita\" has ended",
+				[]map[string]any{{"menuItemId": uuid.New(), "newPriceMinor": int64(45900)}}),
+		},
+	}
+
+	_, err := order.Checkout(uuid.New(), uuid.New(), uuid.New(), lines, "addr", "+70000000000", "", time.Now())
+
+	require.Error(t, err)
+	code, ok := errs.CodeOf(err)
+	require.True(t, ok)
+	assert.Equal(t, errs.CodeRescueOfferExpired, code)
+}
+
+// TestCheckout_RescueOfferExpiredOutranksPriceChanged mirrors the existing
+// priority tests: an expired rescue deal is reported ahead of an unrelated
+// plain price change on another line, matching Checkout's documented
+// priority order.
+func TestCheckout_RescueOfferExpiredOutranksPriceChanged(t *testing.T) {
+	lines := []order.CheckoutLine{
+		priceChangedLine("Cola", 1, 15900, 16900),
+		{
+			MenuItemID: uuid.New(),
+			Name:       "Margherita",
+			Quantity:   1,
+			Err:        errs.New(errs.CodeRescueOfferExpired, "the rescue offer has ended"),
+		},
+	}
+
+	_, err := order.Checkout(uuid.New(), uuid.New(), uuid.New(), lines, "addr", "+70000000000", "", time.Now())
+
+	code, ok := errs.CodeOf(err)
+	require.True(t, ok)
+	assert.Equal(t, errs.CodeRescueOfferExpired, code)
+}
+
 func TestCheckout_UnexpectedLineErrorFailsFast(t *testing.T) {
 	boom := errors.New("database is on fire")
 	lines := []order.CheckoutLine{

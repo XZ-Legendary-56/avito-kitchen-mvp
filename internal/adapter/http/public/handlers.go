@@ -2,7 +2,6 @@ package public
 
 import (
 	"context"
-	"errors"
 
 	"avito-kitchen/internal/domain/errs"
 	"avito-kitchen/internal/generated/publicapi"
@@ -10,10 +9,9 @@ import (
 	orderusecase "avito-kitchen/internal/usecase/order"
 )
 
-// Handlers implements publicapi.StrictServerInterface. Every method either
-// maps a request to a use-case call and its result to a wire type, or —
-// for the one operation this stage does not build (the rescue feed) —
-// reports that plainly rather than pretending to handle it.
+// Handlers implements publicapi.StrictServerInterface. Every method just
+// maps a request to a use-case call and its result to a wire type — no
+// business rule lives here.
 type Handlers struct {
 	Catalog  *catalogusecase.Service
 	Cart     *orderusecase.CartService
@@ -174,15 +172,28 @@ func (h *Handlers) CancelOrder(ctx context.Context, request publicapi.CancelOrde
 	return publicapi.CancelOrder200JSONResponse(toOrder(o)), nil
 }
 
-// errNotImplementedYet is returned by the one operation this stage does
-// not build: the rescue feed. PROMPT.md's own stage plan (section 13)
-// defers rescue offers until after stage 10 — the strict server interface
-// still requires a method for every path in the spec, so this exists to
-// say "not yet" honestly instead of faking a response. httperr.Write
-// reports it as a plain 500 for now; there is nothing more specific to say
-// about a route that legitimately has no implementation.
-var errNotImplementedYet = errors.New("not implemented until a later stage of this project")
+func (h *Handlers) ListRescueOffers(ctx context.Context, request publicapi.ListRescueOffersRequestObject) (publicapi.ListRescueOffersResponseObject, error) {
+	cursor := ""
+	if request.Params.Cursor != nil {
+		cursor = *request.Params.Cursor
+	}
+	limit := 0
+	if request.Params.Limit != nil {
+		limit = *request.Params.Limit
+	}
 
-func (h *Handlers) ListRescueOffers(context.Context, publicapi.ListRescueOffersRequestObject) (publicapi.ListRescueOffersResponseObject, error) {
-	return nil, errNotImplementedYet
+	page, err := h.Catalog.ListRescueOffers(ctx, cursor, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]publicapi.RescueOfferFeedEntry, len(page.Items))
+	for i, e := range page.Items {
+		items[i] = toRescueOfferFeedEntry(e)
+	}
+	out := publicapi.RescueOfferListPage{Items: items}
+	if page.NextCursor != "" {
+		out.NextCursor = &page.NextCursor
+	}
+	return publicapi.ListRescueOffers200JSONResponse(out), nil
 }

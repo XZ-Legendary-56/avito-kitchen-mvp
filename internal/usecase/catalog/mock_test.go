@@ -127,3 +127,57 @@ func (mr *MockMenuRepositoryMockRecorder) GetMenuVersion(ctx, venueID any) *gomo
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMenuVersion", reflect.TypeOf((*MockMenuRepository)(nil).GetMenuVersion), ctx, venueID)
 }
+
+// MockRescueOfferRepository is a mock of RescueOfferRepository interface.
+type MockRescueOfferRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockRescueOfferRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockRescueOfferRepositoryMockRecorder is the mock recorder for MockRescueOfferRepository.
+type MockRescueOfferRepositoryMockRecorder struct {
+	mock *MockRescueOfferRepository
+}
+
+// NewMockRescueOfferRepository creates a new mock instance.
+func NewMockRescueOfferRepository(ctrl *gomock.Controller) *MockRescueOfferRepository {
+	mock := &MockRescueOfferRepository{ctrl: ctrl}
+	mock.recorder = &MockRescueOfferRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRescueOfferRepository) EXPECT() *MockRescueOfferRepositoryMockRecorder {
+	return m.recorder
+}
+
+// GetActiveForItems mocks base method.
+func (m *MockRescueOfferRepository) GetActiveForItems(ctx context.Context, menuItemIDs []uuid.UUID, now time.Time) (map[uuid.UUID]catalog.RescueOffer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveForItems", ctx, menuItemIDs, now)
+	ret0, _ := ret[0].(map[uuid.UUID]catalog.RescueOffer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveForItems indicates an expected call of GetActiveForItems.
+func (mr *MockRescueOfferRepositoryMockRecorder) GetActiveForItems(ctx, menuItemIDs, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveForItems", reflect.TypeOf((*MockRescueOfferRepository)(nil).GetActiveForItems), ctx, menuItemIDs, now)
+}
+
+// ListActiveFeed mocks base method.
+func (m *MockRescueOfferRepository) ListActiveFeed(ctx context.Context, cursor string, limit int, now time.Time) (catalog0.RescueOfferFeedPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActiveFeed", ctx, cursor, limit, now)
+	ret0, _ := ret[0].(catalog0.RescueOfferFeedPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActiveFeed indicates an expected call of ListActiveFeed.
+func (mr *MockRescueOfferRepositoryMockRecorder) ListActiveFeed(ctx, cursor, limit, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActiveFeed", reflect.TypeOf((*MockRescueOfferRepository)(nil).ListActiveFeed), ctx, cursor, limit, now)
+}

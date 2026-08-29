@@ -147,6 +147,19 @@ func toPartnerMenu(m partnerusecase.Menu) partnerapi.PartnerMenu {
 	return partnerapi.PartnerMenu{MenuVersion: m.MenuVersion, Categories: categories}
 }
 
+func toPartnerRescueOffer(o domaincatalog.RescueOffer) partnerapi.RescueOffer {
+	return partnerapi.RescueOffer{
+		Id:                o.ID,
+		MenuItemId:        o.MenuItemID,
+		DiscountPercent:   o.DiscountPercent,
+		InitialQuantity:   o.InitialQuantity,
+		RemainingQuantity: o.RemainingQuantity,
+		StartsAt:          o.StartsAt,
+		EndsAt:            o.EndsAt,
+		CancelledAt:       o.CancelledAt,
+	}
+}
+
 func toPartnerOrder(o *domainorder.Order) partnerapi.PartnerOrder {
 	out := partnerapi.PartnerOrder{
 		Id:              o.ID,

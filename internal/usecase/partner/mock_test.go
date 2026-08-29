@@ -211,6 +211,74 @@ func (mr *MockMenuRepositoryMockRecorder) UpdateItem(ctx, venueID, itemID, patch
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateItem", reflect.TypeOf((*MockMenuRepository)(nil).UpdateItem), ctx, venueID, itemID, patch)
 }
 
+// MockRescueOfferRepository is a mock of RescueOfferRepository interface.
+type MockRescueOfferRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockRescueOfferRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockRescueOfferRepositoryMockRecorder is the mock recorder for MockRescueOfferRepository.
+type MockRescueOfferRepositoryMockRecorder struct {
+	mock *MockRescueOfferRepository
+}
+
+// NewMockRescueOfferRepository creates a new mock instance.
+func NewMockRescueOfferRepository(ctrl *gomock.Controller) *MockRescueOfferRepository {
+	mock := &MockRescueOfferRepository{ctrl: ctrl}
+	mock.recorder = &MockRescueOfferRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRescueOfferRepository) EXPECT() *MockRescueOfferRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Cancel mocks base method.
+func (m *MockRescueOfferRepository) Cancel(ctx context.Context, venueID, offerID uuid.UUID, now time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cancel", ctx, venueID, offerID, now)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Cancel indicates an expected call of Cancel.
+func (mr *MockRescueOfferRepositoryMockRecorder) Cancel(ctx, venueID, offerID, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cancel", reflect.TypeOf((*MockRescueOfferRepository)(nil).Cancel), ctx, venueID, offerID, now)
+}
+
+// Create mocks base method.
+func (m *MockRescueOfferRepository) Create(ctx context.Context, o catalog.RescueOffer) (*catalog.RescueOffer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, o)
+	ret0, _ := ret[0].(*catalog.RescueOffer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockRescueOfferRepositoryMockRecorder) Create(ctx, o any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRescueOfferRepository)(nil).Create), ctx, o)
+}
+
+// List mocks base method.
+func (m *MockRescueOfferRepository) List(ctx context.Context, venueID uuid.UUID, activeOnly bool, now time.Time) ([]catalog.RescueOffer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "List", ctx, venueID, activeOnly, now)
+	ret0, _ := ret[0].([]catalog.RescueOffer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// List indicates an expected call of List.
+func (mr *MockRescueOfferRepositoryMockRecorder) List(ctx, venueID, activeOnly, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockRescueOfferRepository)(nil).List), ctx, venueID, activeOnly, now)
+}
+
 // MockOrderRepository is a mock of OrderRepository interface.
 type MockOrderRepository struct {
 	ctrl     *gomock.Controller

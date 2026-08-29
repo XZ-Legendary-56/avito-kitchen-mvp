@@ -71,3 +71,43 @@ type MenuRepository interface {
 	// GetMenu returns errs.CodeNotFound if venueID does not exist.
 	GetMenu(ctx context.Context, venueID uuid.UUID) (Menu, error)
 }
+
+// RescueOfferFeedEntry is one row of GET /rescue's cross-venue feed
+// (PROMPT.md 5.5) — a rescue offer plus enough about its venue and item to
+// show a card without a follow-up request per row.
+type RescueOfferFeedEntry struct {
+	Offer        domaincatalog.RescueOffer
+	VenueName    string
+	MenuItemName string
+	// PriceBefore is the item's plain price at read time — the discount is
+	// derived from it via Offer.DiscountedPrice, not stored separately.
+	PriceBeforeMinor int64
+}
+
+// RescueOfferFeedPage is ListActiveFeed's output — same cursor-pagination
+// shape as VenuePage, one page plus an opaque cursor for the next.
+type RescueOfferFeedPage struct {
+	Items      []RescueOfferFeedEntry
+	NextCursor string
+}
+
+// RescueOfferRepository is the catalog use-case's own view of rescue offers
+// (PROMPT.md 5.5): enough to attach an active offer to a menu item and to
+// serve the standalone cross-venue feed.
+type RescueOfferRepository interface {
+	// GetActiveForItems returns, for each of menuItemIDs that currently has
+	// an active offer (window valid and remaining_quantity > 0), that
+	// offer — keyed by menu_item_id. Ids with none are simply absent.
+	// Never one query per item (PROMPT.md 6.6).
+	GetActiveForItems(ctx context.Context, menuItemIDs []uuid.UUID, now time.Time) (map[uuid.UUID]domaincatalog.RescueOffer, error)
+
+	// ListActiveFeed returns a page of active offers across every venue,
+	// soonest-closing first (PROMPT.md 5.5), already filtered down to
+	// offers a customer could actually redeem right now: the item itself
+	// is not stopped or out of stock, and the venue is open and accepting
+	// orders — the other two of PROMPT.md 5.5's four activity conditions,
+	// pushed into this query for the same reason VenueRepository.List
+	// pushes its OnlyOpen filter into SQL rather than filtering in Go
+	// (PROMPT.md 6.6: filtering after the LIMIT would corrupt pagination).
+	ListActiveFeed(ctx context.Context, cursor string, limit int, now time.Time) (RescueOfferFeedPage, error)
+}

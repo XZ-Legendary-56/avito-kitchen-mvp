@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,17 +15,36 @@ import (
 
 // CartService implements the cart use-cases (PROMPT.md 5.1 item 3).
 type CartService struct {
-	carts     CartRepository
-	menuItems MenuItemLookup
-	txManager usecase.TxManager
+	carts        CartRepository
+	menuItems    MenuItemLookup
+	rescueOffers RescueOfferRepository
+	txManager    usecase.TxManager
 }
 
 // NewCartService builds a CartService. Mutations run through txManager
 // (PROMPT.md 6.4) because each one is a read-modify-write of the whole
 // cart: two requests for the same client racing between the read and the
 // write would otherwise silently lose one of them.
-func NewCartService(carts CartRepository, menuItems MenuItemLookup, txManager usecase.TxManager) *CartService {
-	return &CartService{carts: carts, menuItems: menuItems, txManager: txManager}
+func NewCartService(carts CartRepository, menuItems MenuItemLookup, rescueOffers RescueOfferRepository, txManager usecase.TxManager) *CartService {
+	return &CartService{carts: carts, menuItems: menuItems, rescueOffers: rescueOffers, txManager: txManager}
+}
+
+// resolvePricing is the soft-check pricing decision shared by AddItem and
+// UpdateItemQuantity (PROMPT.md 5.5: rescue activity is computed at read
+// time, so both mutation paths always re-resolve it fresh rather than
+// keeping whatever was true on an earlier call). If item currently has an
+// active rescue offer, the line snapshots the discounted price and that
+// offer's id; otherwise it snapshots the item's plain price with no offer.
+func (s *CartService) resolvePricing(ctx context.Context, item *domaincatalog.MenuItem) (priceMinor int64, rescueOfferID *uuid.UUID, err error) {
+	offers, err := s.rescueOffers.GetActiveForItems(ctx, []uuid.UUID{item.ID}, time.Now())
+	if err != nil {
+		return 0, nil, fmt.Errorf("look up rescue offer: %w", err)
+	}
+	offer, ok := offers[item.ID]
+	if !ok {
+		return item.PriceMinor, nil, nil
+	}
+	return offer.DiscountedPrice(item.PriceMinor), &offer.ID, nil
 }
 
 // CartView is what every cart use-case returns: the cart itself (nil if the
@@ -57,7 +77,11 @@ func (s *CartService) GetCart(ctx context.Context, clientID uuid.UUID) (CartView
 }
 
 // menuItemSnapshot re-fetches every line's menu item in one batch call
-// (PROMPT.md 6.6), never one query per line.
+// (PROMPT.md 6.6), never one query per line, and attaches each item's
+// currently active rescue offer (if any) for display — this is always the
+// LIVE offer, independent of which one (if any) the line's own
+// PriceMinorSnapshot/RescueOfferID was resolved against; PROMPT.md 5.5
+// computes activity at read time, and a cart view is exactly a read.
 func (s *CartService) menuItemSnapshot(ctx context.Context, cart *domainorder.Cart) (map[uuid.UUID]domaincatalog.MenuItem, error) {
 	ids := make([]uuid.UUID, len(cart.Items))
 	for i, item := range cart.Items {
@@ -66,6 +90,18 @@ func (s *CartService) menuItemSnapshot(ctx context.Context, cart *domainorder.Ca
 	items, err := s.menuItems.GetMany(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("look up cart item menu items: %w", err)
+	}
+
+	offers, err := s.rescueOffers.GetActiveForItems(ctx, ids, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("look up rescue offers: %w", err)
+	}
+	for id, mi := range items {
+		if offer, ok := offers[id]; ok {
+			offer := offer
+			mi.RescueOffer = &offer
+			items[id] = mi
+		}
 	}
 	return items, nil
 }
@@ -87,6 +123,10 @@ func (s *CartService) AddItem(ctx context.Context, clientID, menuItemID uuid.UUI
 	if err := item.EnsureAvailable(quantity); err != nil {
 		return CartView{}, err
 	}
+	priceMinor, rescueOfferID, err := s.resolvePricing(ctx, item)
+	if err != nil {
+		return CartView{}, err
+	}
 
 	var cart *domainorder.Cart
 	err = s.txManager.WithinTx(ctx, func(ctx context.Context) error {
@@ -98,7 +138,7 @@ func (s *CartService) AddItem(ctx context.Context, clientID, menuItemID uuid.UUI
 		if cart == nil {
 			cart = domainorder.NewCart(clientID, item.VenueID)
 		}
-		if txErr := cart.AddItem(uuid.New(), item.VenueID, item.ID, quantity, item.PriceMinor); txErr != nil {
+		if txErr := cart.AddItem(uuid.New(), item.VenueID, item.ID, quantity, priceMinor, rescueOfferID); txErr != nil {
 			return txErr
 		}
 		return s.carts.Save(ctx, cart)
@@ -115,7 +155,11 @@ func (s *CartService) AddItem(ctx context.Context, clientID, menuItemID uuid.UUI
 }
 
 // UpdateItemQuantity changes the quantity of the cart line identified by
-// itemID (cart_items.id, not the menu item id).
+// itemID (cart_items.id, not the menu item id). The price/rescue-offer
+// snapshot is re-resolved fresh against the line's menu item, same as
+// AddItem — PROMPT.md 5.5 computes offer activity at read time, so a
+// quantity bump must not keep whatever discount (or lack of one) applied
+// when the line was last touched.
 func (s *CartService) UpdateItemQuantity(ctx context.Context, clientID, itemID uuid.UUID, quantity int) (CartView, error) {
 	var cart *domainorder.Cart
 	err := s.txManager.WithinTx(ctx, func(ctx context.Context) error {
@@ -127,7 +171,32 @@ func (s *CartService) UpdateItemQuantity(ctx context.Context, clientID, itemID u
 		if cart == nil {
 			return errs.New(errs.CodeNotFound, "cart not found")
 		}
-		if txErr := cart.UpdateQuantity(itemID, quantity); txErr != nil {
+
+		var menuItemID uuid.UUID
+		found := false
+		for _, line := range cart.Items {
+			if line.ID == itemID {
+				menuItemID = line.MenuItemID
+				found = true
+				break
+			}
+		}
+		if !found {
+			return errs.New(errs.CodeNotFound, "cart item not found")
+		}
+		item, txErr := s.menuItems.Get(ctx, menuItemID)
+		if txErr != nil {
+			return fmt.Errorf("look up menu item: %w", txErr)
+		}
+		if item == nil {
+			return errs.New(errs.CodeNotFound, "menu item not found")
+		}
+		priceMinor, rescueOfferID, txErr := s.resolvePricing(ctx, item)
+		if txErr != nil {
+			return txErr
+		}
+
+		if txErr := cart.UpdateQuantity(itemID, quantity, priceMinor, rescueOfferID); txErr != nil {
 			return txErr
 		}
 		return s.carts.Save(ctx, cart)

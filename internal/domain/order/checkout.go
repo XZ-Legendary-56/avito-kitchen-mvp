@@ -33,6 +33,23 @@ type CheckoutLine struct {
 	Quantity       int
 	UnitPriceMinor int64
 	Err            error
+
+	// RescueOfferID, RescueQuantity and RescueUnitPriceMinor are PROMPT.md
+	// 5.5's line-splitting inputs, already fully resolved by the caller
+	// (same "Checkout never redoes a check itself" rule as everything else
+	// on this type). RescueOfferID nil means this line has no rescue offer
+	// at all. Otherwise RescueQuantity is how many of Quantity still get
+	// the discount right now (0..Quantity — 0 is a legitimate, non-error
+	// outcome: the offer's window is still open but its stock ran out,
+	// PROMPT.md 5.5's own condition table says that just means "sold at
+	// full price", not a conflict) at RescueUnitPriceMinor each; the
+	// remaining Quantity-RescueQuantity units, if any, are priced at the
+	// ordinary UnitPriceMinor. A caller that finds the offer's WINDOW
+	// itself no longer valid reports that as Err (RESCUE_OFFER_EXPIRED)
+	// instead of setting these — that case is a conflict, not a split.
+	RescueOfferID        *uuid.UUID
+	RescueQuantity       int
+	RescueUnitPriceMinor int64
 }
 
 // Checkout validates lines and, if every one of them is clean, builds a new
@@ -63,7 +80,7 @@ func Checkout(id, clientID, venueID uuid.UUID, lines []CheckoutLine, deliveryAdd
 		return nil, errs.New(errs.CodeCartEmpty, "cart is empty")
 	}
 
-	for _, code := range []errs.Code{errs.CodePriceChanged, errs.CodeItemUnavailable, errs.CodeInsufficientStock} {
+	for _, code := range []errs.Code{errs.CodeRescueOfferExpired, errs.CodePriceChanged, errs.CodeItemUnavailable, errs.CodeInsufficientStock} {
 		if err := combineLineErrors(lines, code); err != nil {
 			return nil, err
 		}
@@ -77,15 +94,36 @@ func Checkout(id, clientID, venueID uuid.UUID, lines []CheckoutLine, deliveryAdd
 		}
 	}
 
-	items := make([]Item, len(lines))
-	for i, l := range lines {
-		items[i] = Item{
+	var items []Item
+	for _, l := range lines {
+		if l.RescueOfferID != nil && l.RescueQuantity > 0 {
+			offerID := *l.RescueOfferID
+			items = append(items, Item{
+				ID:             uuid.New(),
+				MenuItemID:     l.MenuItemID,
+				RescueOfferID:  &offerID,
+				NameSnapshot:   l.Name,
+				UnitPriceMinor: l.RescueUnitPriceMinor,
+				Quantity:       l.RescueQuantity,
+			})
+			if remainder := l.Quantity - l.RescueQuantity; remainder > 0 {
+				items = append(items, Item{
+					ID:             uuid.New(),
+					MenuItemID:     l.MenuItemID,
+					NameSnapshot:   l.Name,
+					UnitPriceMinor: l.UnitPriceMinor,
+					Quantity:       remainder,
+				})
+			}
+			continue
+		}
+		items = append(items, Item{
 			ID:             uuid.New(),
 			MenuItemID:     l.MenuItemID,
 			NameSnapshot:   l.Name,
 			UnitPriceMinor: l.UnitPriceMinor,
 			Quantity:       l.Quantity,
-		}
+		})
 	}
 
 	return New(id, clientID, venueID, items, deliveryAddress, customerPhone, comment, now)
@@ -97,6 +135,7 @@ func Checkout(id, clientID, venueID uuid.UUID, lines []CheckoutLine, deliveryAdd
 // its Code, built where the check happened (catalog.MenuItem), so this
 // only merges, it never invents new detail fields.
 func combineLineErrors(lines []CheckoutLine, code errs.Code) error {
+	var found bool
 	var message string
 	var details []map[string]any
 
@@ -105,13 +144,14 @@ func combineLineErrors(lines []CheckoutLine, code errs.Code) error {
 		if !ok || domainErr.Code != code {
 			continue
 		}
+		found = true
 		if message == "" {
 			message = domainErr.Message
 		}
 		details = append(details, domainErr.Details...)
 	}
 
-	if len(details) == 0 {
+	if !found {
 		return nil
 	}
 	return errs.NewWithDetails(code, message, details)

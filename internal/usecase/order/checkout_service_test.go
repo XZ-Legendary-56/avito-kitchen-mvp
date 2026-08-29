@@ -41,11 +41,22 @@ func expectFreshClaim(idem *MockIdempotencyRepository) {
 		Return(order.IdempotencyClaim{Claimed: true}, nil)
 }
 
+// noLockedRescueOffers stubs RescueOfferRepository.LockForCheckout to
+// report "nothing to lock" — the common case for tests whose cart lines
+// carry no RescueOfferID at all (PROMPT.md 5.5's own rescue-specific
+// checkout tests set up a real locked offer instead).
+func noLockedRescueOffers(m *MockRescueOfferRepository) {
+	m.EXPECT().
+		LockForCheckout(gomock.Any(), gomock.Any()).
+		Return(map[uuid.UUID]domaincatalog.RescueOffer{}, nil)
+}
+
 func TestPlaceOrder_EmptyCart(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -56,7 +67,7 @@ func TestPlaceOrder_EmptyCart(t *testing.T) {
 	expectFreshClaim(idem)
 	carts.EXPECT().Get(gomock.Any(), clientID).Return(nil, nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -70,6 +81,7 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -78,13 +90,13 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 
 	clientID, venueID := uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, uuid.New(), 1, 1000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, uuid.New(), 1, 1000, nil))
 
 	expectFreshClaim(idem)
 	carts.EXPECT().Get(gomock.Any(), clientID).Return(cart, nil)
 	venues.EXPECT().Get(gomock.Any(), venueID).Return(nil, nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -98,6 +110,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -106,7 +119,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 
 	clientID, venueID := uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, uuid.New(), 1, 1000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, uuid.New(), 1, 1000, nil))
 
 	venue := alwaysOpenVenue(venueID, 0)
 	venue.AcceptingOrders = false
@@ -115,7 +128,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	venues.EXPECT().Get(gomock.Any(), venueID).Return(&venue, nil)
 	// LockForCheckout must not be called: the venue check fails first.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -129,6 +142,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -137,7 +151,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 
 	clientID, venueID, menuItemID := uuid.New(), uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 2, 10000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 2, 10000, nil))
 
 	venue := alwaysOpenVenue(venueID, 15000)
 	stock := 5
@@ -149,6 +163,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 	menuItems.EXPECT().
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	noLockedRescueOffers(rescueOffers)
 	menuItems.EXPECT().DecrementStock(gomock.Any(), menuItemID, 2).Return(true, nil)
 	venues.EXPECT().BumpMenuVersion(gomock.Any(), venueID).Return(nil)
 	orders.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, o *domainorder.Order) error {
@@ -160,7 +175,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 	idem.EXPECT().LinkOrder(gomock.Any(), clientID, testIdempotencyKey, gomock.Any()).Return(nil)
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "no onions")
 
 	require.NoError(t, err)
@@ -173,6 +188,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -181,7 +197,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 
 	clientID, venueID, menuItemID := uuid.New(), uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000, nil))
 
 	venue := alwaysOpenVenue(venueID, 0)
 	liveItem := domaincatalog.MenuItem{ID: menuItemID, VenueID: venueID, Name: "Margherita", PriceMinor: 12000, IsAvailable: true}
@@ -192,10 +208,11 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	menuItems.EXPECT().
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	noLockedRescueOffers(rescueOffers)
 	// No DecrementStock, BumpMenuVersion, Create, LinkOrder or Clear: a
 	// failed checkout must have zero side effects.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -209,6 +226,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -217,7 +235,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 
 	clientID, venueID, menuItemID := uuid.New(), uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 3, 10000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 3, 10000, nil))
 
 	venue := alwaysOpenVenue(venueID, 0)
 	stock := 1
@@ -229,8 +247,9 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 	menuItems.EXPECT().
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	noLockedRescueOffers(rescueOffers)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -244,6 +263,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -252,7 +272,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 
 	clientID, venueID, menuItemID := uuid.New(), uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000, nil))
 
 	venue := alwaysOpenVenue(venueID, 50000) // minimum far above this cart's total
 	liveItem := domaincatalog.MenuItem{ID: menuItemID, VenueID: venueID, Name: "Margherita", PriceMinor: 10000, IsAvailable: true}
@@ -263,10 +283,11 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	menuItems.EXPECT().
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	noLockedRescueOffers(rescueOffers)
 	// DecrementStock must not be called: the order is rejected before
 	// anything is written.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.Error(t, err)
@@ -280,6 +301,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -288,7 +310,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 
 	clientID, venueID, menuItemID := uuid.New(), uuid.New(), uuid.New()
 	cart := domainorder.NewCart(clientID, venueID)
-	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000))
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 1, 10000, nil))
 
 	venue := alwaysOpenVenue(venueID, 0)
 	liveItem := domaincatalog.MenuItem{ID: menuItemID, VenueID: venueID, Name: "Soup of the day", PriceMinor: 10000, IsAvailable: true, StockQty: nil}
@@ -299,6 +321,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	menuItems.EXPECT().
 		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
 		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	noLockedRescueOffers(rescueOffers)
 	menuItems.EXPECT().DecrementStock(gomock.Any(), menuItemID, 1).Return(false, nil)
 	// BumpMenuVersion must not be called: nothing about the menu actually
 	// changed for an unlimited-stock item.
@@ -307,7 +330,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	idem.EXPECT().LinkOrder(gomock.Any(), clientID, testIdempotencyKey, gomock.Any()).Return(nil)
 	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
@@ -318,6 +341,7 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -336,7 +360,7 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	// because the cart it would need is typically already gone (the
 	// original, successful attempt cleared it).
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
 
 	require.NoError(t, err)
@@ -349,6 +373,7 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	carts := NewMockCartRepository(ctrl)
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
 	orders := NewMockOrderRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
@@ -362,11 +387,117 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	// No OrderRepository.Get either: a hash mismatch is a conflict, not a
 	// lookup.
 
-	svc := order.NewCheckoutService(carts, venues, menuItems, orders, idem, outboxRepo, tx)
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
 	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "a different address", "+70000000000", "")
 
 	require.Error(t, err)
 	code, ok := errs.CodeOf(err)
 	require.True(t, ok)
 	assert.Equal(t, errs.CodeIdempotencyKeyConflict, code)
+}
+
+// TestPlaceOrder_RescueOfferExpired_NoSideEffects covers PROMPT.md 5.5's
+// "the offer ended while the item sat in the cart" case: a cart line whose
+// snapshot assumed a rescue offer, but the specific offer's window is no
+// longer valid by checkout time.
+func TestPlaceOrder_RescueOfferExpired_NoSideEffects(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	carts := NewMockCartRepository(ctrl)
+	venues := NewMockVenueLookup(ctrl)
+	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
+	orders := NewMockOrderRepository(ctrl)
+	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
+	tx := NewMockTxManager(ctrl)
+	passthroughTx(tx)
+
+	clientID, venueID, menuItemID, offerID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	cart := domainorder.NewCart(clientID, venueID)
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 2, 27540, &offerID))
+
+	venue := alwaysOpenVenue(venueID, 0)
+	liveItem := domaincatalog.MenuItem{ID: menuItemID, VenueID: venueID, Name: "Margherita", PriceMinor: 45900, IsAvailable: true}
+	expiredOffer := domaincatalog.RescueOffer{
+		ID: offerID, MenuItemID: menuItemID, DiscountPercent: 40, RemainingQuantity: 5,
+		StartsAt: time.Now().Add(-2 * time.Hour), EndsAt: time.Now().Add(-time.Hour), // window already closed
+	}
+
+	expectFreshClaim(idem)
+	carts.EXPECT().Get(gomock.Any(), clientID).Return(cart, nil)
+	venues.EXPECT().Get(gomock.Any(), venueID).Return(&venue, nil)
+	menuItems.EXPECT().
+		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
+		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	rescueOffers.EXPECT().
+		LockForCheckout(gomock.Any(), []uuid.UUID{offerID}).
+		Return(map[uuid.UUID]domaincatalog.RescueOffer{offerID: expiredOffer}, nil)
+	// No DecrementStock, DecrementRemaining, Create, LinkOrder or Clear: a
+	// failed checkout must have zero side effects.
+
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
+	_, _, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+
+	require.Error(t, err)
+	code, ok := errs.CodeOf(err)
+	require.True(t, ok)
+	assert.Equal(t, errs.CodeRescueOfferExpired, code)
+}
+
+// TestPlaceOrder_RescuePartialCoverage_SplitsAndSucceeds is PROMPT.md 5.5's
+// own mandated test at the use-case level: requesting more than a still-live
+// offer has left succeeds, producing two order_items and decrementing both
+// counters by their own amounts (full quantity off stock_qty, only the
+// eligible quantity off the offer's remaining_quantity).
+func TestPlaceOrder_RescuePartialCoverage_SplitsAndSucceeds(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	carts := NewMockCartRepository(ctrl)
+	venues := NewMockVenueLookup(ctrl)
+	menuItems := NewMockMenuItemLookup(ctrl)
+	rescueOffers := NewMockRescueOfferRepository(ctrl)
+	orders := NewMockOrderRepository(ctrl)
+	idem := NewMockIdempotencyRepository(ctrl)
+	outboxRepo := NewMockOutboxRepository(ctrl)
+	tx := NewMockTxManager(ctrl)
+	passthroughTx(tx)
+
+	clientID, venueID, menuItemID, offerID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	cart := domainorder.NewCart(clientID, venueID)
+	require.NoError(t, cart.AddItem(uuid.New(), venueID, menuItemID, 5, 27540, &offerID))
+
+	venue := alwaysOpenVenue(venueID, 0)
+	stock := 10
+	liveItem := domaincatalog.MenuItem{ID: menuItemID, VenueID: venueID, Name: "Margherita", PriceMinor: 45900, IsAvailable: true, StockQty: &stock}
+	liveOffer := domaincatalog.RescueOffer{
+		ID: offerID, MenuItemID: menuItemID, DiscountPercent: 40, RemainingQuantity: 3, // less than the 5 requested
+		StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(time.Hour),
+	}
+
+	expectFreshClaim(idem)
+	carts.EXPECT().Get(gomock.Any(), clientID).Return(cart, nil)
+	venues.EXPECT().Get(gomock.Any(), venueID).Return(&venue, nil)
+	menuItems.EXPECT().
+		LockForCheckout(gomock.Any(), []uuid.UUID{menuItemID}).
+		Return(map[uuid.UUID]domaincatalog.MenuItem{menuItemID: liveItem}, nil)
+	rescueOffers.EXPECT().
+		LockForCheckout(gomock.Any(), []uuid.UUID{offerID}).
+		Return(map[uuid.UUID]domaincatalog.RescueOffer{offerID: liveOffer}, nil)
+	menuItems.EXPECT().DecrementStock(gomock.Any(), menuItemID, 5).Return(true, nil)
+	rescueOffers.EXPECT().DecrementRemaining(gomock.Any(), offerID, 3).Return(nil)
+	venues.EXPECT().BumpMenuVersion(gomock.Any(), venueID).Return(nil)
+	orders.EXPECT().Create(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, o *domainorder.Order) error {
+		require.Len(t, o.Items, 2)
+		assert.Equal(t, int64(3*27540+2*45900), o.TotalMinor())
+		return nil
+	})
+	outboxRepo.EXPECT().Enqueue(gomock.Any(), gomock.Any()).Return(nil)
+	idem.EXPECT().LinkOrder(gomock.Any(), clientID, testIdempotencyKey, gomock.Any()).Return(nil)
+	carts.EXPECT().Clear(gomock.Any(), clientID).Return(nil)
+
+	svc := order.NewCheckoutService(carts, venues, menuItems, rescueOffers, orders, idem, outboxRepo, tx)
+	o, replayed, err := svc.PlaceOrder(context.Background(), clientID, testIdempotencyKey, "addr", "+70000000000", "")
+
+	require.NoError(t, err)
+	assert.False(t, replayed)
+	assert.Equal(t, int64(3*27540+2*45900), o.TotalMinor())
 }

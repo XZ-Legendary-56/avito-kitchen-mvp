@@ -144,6 +144,32 @@ type OutboxRepository interface {
 	Enqueue(ctx context.Context, e OutboxEvent) error
 }
 
+// RescueOfferRepository is checkout and the cart's own view of rescue
+// offers (PROMPT.md 5.5) — enough to soft-check one at cart-add/update time
+// and to hard-check + consume one inside the checkout transaction.
+type RescueOfferRepository interface {
+	// GetActiveForItems returns, for each of menuItemIDs that currently has
+	// an active offer (window valid and remaining_quantity > 0), that
+	// offer — keyed by menu_item_id. Ids with none are simply absent.
+	// Never one query per item (PROMPT.md 6.6).
+	GetActiveForItems(ctx context.Context, menuItemIDs []uuid.UUID, now time.Time) (map[uuid.UUID]domaincatalog.RescueOffer, error)
+
+	// LockForCheckout locks the given rescue offers FOR UPDATE, in
+	// ascending id order — same reasoning and same deadlock-avoidance
+	// argument as MenuItemLookup.LockForCheckout, just for a different
+	// table. Must only be called inside the checkout transaction, always
+	// after locking menu items (a fixed lock order across every checkout
+	// is what avoids a cross-table deadlock between two concurrent
+	// checkouts). Ids that do not exist are simply absent from the result.
+	LockForCheckout(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domaincatalog.RescueOffer, error)
+
+	// DecrementRemaining reduces remaining_quantity by quantity. Must run
+	// against a row already locked by LockForCheckout in the same
+	// transaction, in the same transaction as MenuItemLookup.DecrementStock
+	// (PROMPT.md 5.5: both counters move together or not at all).
+	DecrementRemaining(ctx context.Context, id uuid.UUID, quantity int) error
+}
+
 // CartRepository persists a client's cart as a whole. Save replaces the
 // entire item set atomically rather than patching individual rows — see
 // adapter/postgres's implementation for why that is the simpler and

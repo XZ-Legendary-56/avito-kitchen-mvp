@@ -59,13 +59,14 @@ func newPublicAPIRouter(pool *pgxpool.Pool, orders *postgres.OrderRepository, ou
 	venues := postgres.NewVenueRepository(pool)
 	menus := postgres.NewMenuRepository(pool)
 	carts := postgres.NewCartRepository(pool)
+	rescueOffers := postgres.NewRescueOfferRepository(pool)
 	idempotency := postgres.NewIdempotencyRepository(pool)
 	txManager := postgres.NewTxManager(pool)
 
 	handlers := &public.Handlers{
-		Catalog:  catalogusecase.NewService(venues, menus),
-		Cart:     orderusecase.NewCartService(carts, menus, txManager),
-		Checkout: orderusecase.NewCheckoutService(carts, venues, menus, orders, idempotency, outboxRepo, txManager),
+		Catalog:  catalogusecase.NewService(venues, menus, rescueOffers),
+		Cart:     orderusecase.NewCartService(carts, menus, rescueOffers, txManager),
+		Checkout: orderusecase.NewCheckoutService(carts, venues, menus, rescueOffers, orders, idempotency, outboxRepo, txManager),
 		Orders:   orderusecase.NewOrderService(orders, outboxRepo, txManager),
 	}
 
@@ -92,10 +93,13 @@ func newPartnerAPIRouter(pool *pgxpool.Pool, orders *postgres.OrderRepository) h
 	auth := postgres.NewPartnerAuthRepository(pool)
 	txManager := postgres.NewTxManager(pool)
 
+	rescueOffers := postgres.NewRescueOfferRepository(pool)
+
 	handlers := &partner.Handlers{
-		Venues: partnerusecase.NewVenueService(venues, txManager),
-		Menus:  partnerusecase.NewMenuService(menus),
-		Orders: partnerusecase.NewOrderService(orders),
+		Venues:       partnerusecase.NewVenueService(venues, txManager),
+		Menus:        partnerusecase.NewMenuService(menus),
+		Orders:       partnerusecase.NewOrderService(orders),
+		RescueOffers: partnerusecase.NewRescueOfferService(rescueOffers),
 	}
 
 	strictHandler := partnerapi.NewStrictHandlerWithOptions(handlers, nil, partnerapi.StrictHTTPServerOptions{

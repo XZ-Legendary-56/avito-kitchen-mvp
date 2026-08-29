@@ -27,6 +27,14 @@ type MenuItem struct {
 	// venue's own system and keep that system's id in ExternalID.
 	Source     string
 	ExternalID *string
+	// RescueOffer is the item's currently active rescue offer, or nil.
+	// Unlike IsOpen on Venue (a pure function of data the type already
+	// holds), this cannot be computed from fields on MenuItem itself — it
+	// requires a live query against rescue_offers — so whoever loads a
+	// MenuItem for display attaches it as a separate step, the same way
+	// VenueRepository.attachSchedules is a separate step from the main
+	// venue query, rather than folding it into scanMenuItem.
+	RescueOffer *RescueOffer
 }
 
 // EnsureAvailable returns ITEM_UNAVAILABLE if the item was switched off by

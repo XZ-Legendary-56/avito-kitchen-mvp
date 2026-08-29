@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,6 +45,7 @@ func placeTestOrder(t *testing.T, pool *pgxpool.Pool, clientID, venueID, menuIte
 		pgadapter.NewCartRepository(pool),
 		pgadapter.NewVenueRepository(pool),
 		pgadapter.NewMenuRepository(pool),
+		pgadapter.NewRescueOfferRepository(pool),
 		pgadapter.NewOrderRepository(pool),
 		pgadapter.NewIdempotencyRepository(pool),
 		pgadapter.NewOutboxRepository(pool),
@@ -158,10 +160,15 @@ func TestOutboxDispatcher_RetriesOnFailureThenGivesUpAfterFiveAttempts(t *testin
 	assert.Equal(t, 1, attempts)
 
 	// Skip straight to "4 attempts already failed" so this poll is the 5th
-	// and last one, without waiting out four real backoff windows.
+	// and last one, without waiting out four real backoff windows. The
+	// fast-forwarded timestamp comes from Go's own clock, not SQL's now()
+	// — Dispatcher.ProcessOnce compares against time.Now() on this same
+	// machine, and comparing against a timestamp the database server
+	// computed itself would make this flaky under any host/container clock
+	// drift, however small.
 	_, err = pool.Exec(ctx, `
-		UPDATE outbox_events SET attempts = 4, next_attempt_at = now() WHERE aggregate_id = $1
-	`, o.ID)
+		UPDATE outbox_events SET attempts = 4, next_attempt_at = $2 WHERE aggregate_id = $1
+	`, o.ID, time.Now().Add(-time.Minute))
 	require.NoError(t, err)
 
 	_, err = dispatcher.ProcessOnce(ctx, 10)

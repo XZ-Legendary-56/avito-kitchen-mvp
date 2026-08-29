@@ -86,6 +86,21 @@ func formatTimeOfDay(d time.Duration) string {
 	return time.Date(0, 1, 1, h, m, s, 0, time.UTC).Format("15:04:05")
 }
 
+// toRescueOfferSummary builds the wire summary shown alongside a menu item
+// or cart line that currently has one (PROMPT.md 5.5). priceBeforeMinor is
+// the item's plain price; the discounted price is derived from it via
+// RescueOffer.DiscountedPrice, never stored separately.
+func toRescueOfferSummary(o domaincatalog.RescueOffer, priceBeforeMinor int64) publicapi.RescueOfferSummary {
+	return publicapi.RescueOfferSummary{
+		Id:                o.ID,
+		DiscountPercent:   o.DiscountPercent,
+		PriceBefore:       money(priceBeforeMinor),
+		PriceAfter:        money(o.DiscountedPrice(priceBeforeMinor)),
+		RemainingQuantity: o.RemainingQuantity,
+		EndsAt:            o.EndsAt,
+	}
+}
+
 func toMenuItem(mi domaincatalog.MenuItem) publicapi.MenuItem {
 	out := publicapi.MenuItem{
 		Id:          mi.ID,
@@ -94,12 +109,13 @@ func toMenuItem(mi domaincatalog.MenuItem) publicapi.MenuItem {
 		Price:       money(mi.PriceMinor),
 		IsAvailable: mi.IsAvailable,
 		StockQty:    mi.StockQty,
-		// RescueOffer is always nil for now: rescue offers are not built
-		// yet (PROMPT.md's own stage plan defers that feature until
-		// stages 1-10 are done and tested).
 	}
 	if mi.Description != "" {
 		out.Description = &mi.Description
+	}
+	if mi.RescueOffer != nil {
+		summary := toRescueOfferSummary(*mi.RescueOffer, mi.PriceMinor)
+		out.RescueOffer = &summary
 	}
 	return out
 }
@@ -153,7 +169,7 @@ func toCart(view orderusecase.CartView) publicapi.Cart {
 // line is reported unavailable with an empty name rather than failing the
 // whole cart response.
 func toCartItem(item domainorder.CartItem, mi domaincatalog.MenuItem) publicapi.CartItem {
-	return publicapi.CartItem{
+	out := publicapi.CartItem{
 		Id:          item.ID,
 		MenuItemId:  item.MenuItemID,
 		Name:        mi.Name,
@@ -161,6 +177,27 @@ func toCartItem(item domainorder.CartItem, mi domaincatalog.MenuItem) publicapi.
 		UnitPrice:   money(item.PriceMinorSnapshot),
 		LineTotal:   money(item.Total()),
 		IsAvailable: mi.EnsureAvailable(item.Quantity) == nil,
+	}
+	if mi.RescueOffer != nil {
+		summary := toRescueOfferSummary(*mi.RescueOffer, mi.PriceMinor)
+		out.RescueOffer = &summary
+	}
+	return out
+}
+
+func toRescueOfferFeedEntry(e catalogusecase.RescueOfferFeedEntry) publicapi.RescueOfferFeedEntry {
+	summary := toRescueOfferSummary(e.Offer, e.PriceBeforeMinor)
+	return publicapi.RescueOfferFeedEntry{
+		Id:                summary.Id,
+		DiscountPercent:   summary.DiscountPercent,
+		PriceBefore:       summary.PriceBefore,
+		PriceAfter:        summary.PriceAfter,
+		RemainingQuantity: summary.RemainingQuantity,
+		EndsAt:            summary.EndsAt,
+		VenueId:           e.Offer.VenueID,
+		VenueName:         e.VenueName,
+		MenuItemId:        e.Offer.MenuItemID,
+		MenuItemName:      e.MenuItemName,
 	}
 }
 

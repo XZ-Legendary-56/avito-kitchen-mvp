@@ -14,11 +14,20 @@ import (
 // cart_items), compared against the live menu price at checkout so a
 // change can be reported as PRICE_CHANGED instead of silently charging a
 // different amount.
+//
+// RescueOfferID records which rescue offer (PROMPT.md 5.5), if any,
+// PriceMinorSnapshot was based on when this line was last added to or
+// updated — nil means the snapshot is the item's plain price. It exists so
+// checkout can re-check that SPECIFIC offer's current state (still live?
+// window ended? remaining shrunk?) rather than just asking "is there some
+// active offer now", which could not tell a genuinely expired deal apart
+// from one that never applied to begin with.
 type CartItem struct {
 	ID                 uuid.UUID
 	MenuItemID         uuid.UUID
 	Quantity           int
 	PriceMinorSnapshot int64
+	RescueOfferID      *uuid.UUID
 }
 
 // Total is this line's snapshot price times quantity.
@@ -42,14 +51,18 @@ func NewCart(clientID, venueID uuid.UUID) *Cart {
 	return &Cart{ClientID: clientID, VenueID: venueID}
 }
 
-// AddItem adds quantity units of menuItemID at priceMinorSnapshot, under
-// itemID if this becomes a new line (the caller generates itemID — see
-// domain/order.Item for why ids are supplied rather than self-generated).
-// If menuItemID is already in the cart, quantity is added to the existing
-// line, keeping its existing ID, rather than creating a duplicate line.
-// venueID must match the cart's pinned venue, or this returns
-// CART_VENUE_MISMATCH.
-func (c *Cart) AddItem(itemID, venueID, menuItemID uuid.UUID, quantity int, priceMinorSnapshot int64) error {
+// AddItem adds quantity units of menuItemID at priceMinorSnapshot (possibly
+// a rescue-discounted price, tracked via rescueOfferID — see CartItem's own
+// doc comment), under itemID if this becomes a new line (the caller
+// generates itemID — see domain/order.Item for why ids are supplied rather
+// than self-generated). If menuItemID is already in the cart, quantity is
+// added to the existing line, and its price/rescue offer are overwritten to
+// the values passed in — the caller always resolves them fresh against
+// live data (PROMPT.md 5.5: offer activity is computed at read time, never
+// stored stale), so the merged line must reflect that fresh resolution, not
+// whatever was true when the earlier quantity was added. venueID must match
+// the cart's pinned venue, or this returns CART_VENUE_MISMATCH.
+func (c *Cart) AddItem(itemID, venueID, menuItemID uuid.UUID, quantity int, priceMinorSnapshot int64, rescueOfferID *uuid.UUID) error {
 	if venueID != c.VenueID {
 		return errs.New(errs.CodeCartVenueMismatch,
 			"cart is pinned to a different venue; clear it first")
@@ -58,6 +71,8 @@ func (c *Cart) AddItem(itemID, venueID, menuItemID uuid.UUID, quantity int, pric
 	for i, existing := range c.Items {
 		if existing.MenuItemID == menuItemID {
 			c.Items[i].Quantity += quantity
+			c.Items[i].PriceMinorSnapshot = priceMinorSnapshot
+			c.Items[i].RescueOfferID = rescueOfferID
 			return nil
 		}
 	}
@@ -66,21 +81,26 @@ func (c *Cart) AddItem(itemID, venueID, menuItemID uuid.UUID, quantity int, pric
 		MenuItemID:         menuItemID,
 		Quantity:           quantity,
 		PriceMinorSnapshot: priceMinorSnapshot,
+		RescueOfferID:      rescueOfferID,
 	})
 	return nil
 }
 
-// UpdateQuantity sets the quantity of the line identified by itemID.
-// Returns NOT_FOUND if no line has that ID, or VALIDATION_ERROR if quantity
-// is not positive (a quantity of zero is a removal, done via RemoveItem
-// instead, so the caller's intent stays explicit).
-func (c *Cart) UpdateQuantity(itemID uuid.UUID, quantity int) error {
+// UpdateQuantity sets the quantity of the line identified by itemID, along
+// with a freshly resolved price/rescue offer (see AddItem's own comment for
+// why the caller always re-resolves these rather than keeping the old
+// ones). Returns NOT_FOUND if no line has that ID, or VALIDATION_ERROR if
+// quantity is not positive (a quantity of zero is a removal, done via
+// RemoveItem instead, so the caller's intent stays explicit).
+func (c *Cart) UpdateQuantity(itemID uuid.UUID, quantity int, priceMinorSnapshot int64, rescueOfferID *uuid.UUID) error {
 	if quantity < 1 {
 		return errs.New(errs.CodeValidationError, "quantity must be at least 1")
 	}
 	for i := range c.Items {
 		if c.Items[i].ID == itemID {
 			c.Items[i].Quantity = quantity
+			c.Items[i].PriceMinorSnapshot = priceMinorSnapshot
+			c.Items[i].RescueOfferID = rescueOfferID
 			return nil
 		}
 	}

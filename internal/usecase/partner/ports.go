@@ -134,6 +134,27 @@ type MenuRepository interface {
 	UpdateAvailability(ctx context.Context, venueID uuid.UUID, updates []AvailabilityUpdate) ([]domaincatalog.MenuItem, error)
 }
 
+// RescueOfferRepository is partner's own management surface for rescue
+// offers (PROMPT.md 5.3 item 9 / 5.5): create, list, cancel — scoped to one
+// venue, same as every other partner-facing repository.
+type RescueOfferRepository interface {
+	// List returns venueID's rescue offers. activeOnly, when true, filters
+	// to offers whose window and remaining count are currently usable
+	// (RescueOffer.IsActive) — pushed into the query rather than filtered
+	// in Go for the same PROMPT.md 6.6 reason every other listing is.
+	List(ctx context.Context, venueID uuid.UUID, activeOnly bool, now time.Time) ([]domaincatalog.RescueOffer, error)
+	// Create inserts a new offer scoped to venueID. A window that overlaps
+	// an existing live offer on the same menu item fails with
+	// errs.CodeRescueOfferOverlap — the database's own exclusion
+	// constraint is what actually guarantees this even under concurrent
+	// requests (PROMPT.md 5.5), so this method's only job is translating
+	// that constraint violation into the domain error.
+	Create(ctx context.Context, o domaincatalog.RescueOffer) (*domaincatalog.RescueOffer, error)
+	// Cancel sets cancelled_at on the offer, returning errs.CodeNotFound if
+	// offerID does not exist or does not belong to venueID.
+	Cancel(ctx context.Context, venueID, offerID uuid.UUID, now time.Time) error
+}
+
 // OrderRepository is partner's own order-fulfillment surface.
 type OrderRepository interface {
 	// ListForVenue returns venueID's orders, newest first. status and

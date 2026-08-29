@@ -27,17 +27,18 @@ const idempotencyKeyTTL = 24 * time.Hour
 // under row locks, and everything it touches must agree inside one
 // transaction or not happen at all.
 type CheckoutService struct {
-	carts       CartRepository
-	venues      VenueLookup
-	menuItems   MenuItemLookup
-	orders      OrderRepository
-	idempotency IdempotencyRepository
-	outbox      OutboxRepository
-	txManager   usecase.TxManager
+	carts        CartRepository
+	venues       VenueLookup
+	menuItems    MenuItemLookup
+	rescueOffers RescueOfferRepository
+	orders       OrderRepository
+	idempotency  IdempotencyRepository
+	outbox       OutboxRepository
+	txManager    usecase.TxManager
 }
 
-func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, orders OrderRepository, idempotency IdempotencyRepository, outbox OutboxRepository, txManager usecase.TxManager) *CheckoutService {
-	return &CheckoutService{carts: carts, venues: venues, menuItems: menuItems, orders: orders, idempotency: idempotency, outbox: outbox, txManager: txManager}
+func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, rescueOffers RescueOfferRepository, orders OrderRepository, idempotency IdempotencyRepository, outbox OutboxRepository, txManager usecase.TxManager) *CheckoutService {
+	return &CheckoutService{carts: carts, venues: venues, menuItems: menuItems, rescueOffers: rescueOffers, orders: orders, idempotency: idempotency, outbox: outbox, txManager: txManager}
 }
 
 // PlaceOrder turns clientID's cart into an order, clearing the cart on
@@ -120,9 +121,26 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 			return fmt.Errorf("lock menu items: %w", err)
 		}
 
+		// Rescue offers get their own lock, always taken after menu items
+		// (PROMPT.md 5.5: same locking and id-ordering rules as the regular
+		// stock lock) — a fixed lock order across every checkout, not just
+		// within one table, is what keeps two concurrent checkouts that
+		// touch both a shared item and a shared offer from deadlocking on
+		// each other.
+		var rescueIDs []uuid.UUID
+		for _, item := range cart.Items {
+			if item.RescueOfferID != nil {
+				rescueIDs = append(rescueIDs, *item.RescueOfferID)
+			}
+		}
+		lockedOffers, err := s.rescueOffers.LockForCheckout(ctx, rescueIDs)
+		if err != nil {
+			return fmt.Errorf("lock rescue offers: %w", err)
+		}
+
 		lines := make([]domainorder.CheckoutLine, len(cart.Items))
 		for i, item := range cart.Items {
-			lines[i] = s.buildCheckoutLine(item, locked)
+			lines[i] = s.buildCheckoutLine(item, locked, lockedOffers, now)
 		}
 
 		orderID := uuid.New()
@@ -141,6 +159,18 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 				return fmt.Errorf("decrement stock for %s: %w", item.MenuItemID, err)
 			}
 			stockChanged = stockChanged || changed
+		}
+		// Rescue stock is a second, independent counter on top of the same
+		// regular stock just decremented above (PROMPT.md 5.5: "заказ
+		// уменьшает и menu_items.stock_qty, и rescue_offers.remaining_quantity")
+		// — only for the eligible portion of a line, never the full-price
+		// remainder.
+		for _, l := range lines {
+			if l.RescueOfferID != nil && l.RescueQuantity > 0 {
+				if err := s.rescueOffers.DecrementRemaining(ctx, *l.RescueOfferID, l.RescueQuantity); err != nil {
+					return fmt.Errorf("decrement rescue offer %s: %w", *l.RescueOfferID, err)
+				}
+			}
 		}
 		if stockChanged {
 			if err := s.venues.BumpMenuVersion(ctx, cart.VenueID); err != nil {
@@ -184,11 +214,17 @@ func (s *CheckoutService) PlaceOrder(ctx context.Context, clientID uuid.UUID, id
 // only ever sees the resulting error, never the MenuItem itself, keeping
 // this package's rule (it declares its own ports, never imports
 // usecase/catalog) intact all the way down into the domain layer too.
-func (s *CheckoutService) buildCheckoutLine(item domainorder.CartItem, locked map[uuid.UUID]domaincatalog.MenuItem) domainorder.CheckoutLine {
+//
+// lockedOffers holds, for every cart item's non-nil RescueOfferID, that
+// offer's just-locked row. A line whose cart snapshot assumed a rescue
+// price skips the regular EnsurePriceUnchanged check entirely — comparing a
+// discounted snapshot against the item's plain price would always
+// (wrongly) look like drift — and instead resolves its own rescue-specific
+// outcome via buildRescuePricing.
+func (s *CheckoutService) buildCheckoutLine(item domainorder.CartItem, locked map[uuid.UUID]domaincatalog.MenuItem, lockedOffers map[uuid.UUID]domaincatalog.RescueOffer, now time.Time) domainorder.CheckoutLine {
 	line := domainorder.CheckoutLine{
-		MenuItemID:     item.MenuItemID,
-		Quantity:       item.Quantity,
-		UnitPriceMinor: item.PriceMinorSnapshot,
+		MenuItemID: item.MenuItemID,
+		Quantity:   item.Quantity,
 	}
 
 	mi, ok := locked[item.MenuItemID]
@@ -196,12 +232,51 @@ func (s *CheckoutService) buildCheckoutLine(item domainorder.CartItem, locked ma
 		line.Err = errs.New(errs.CodeNotFound, "menu item no longer exists")
 		return line
 	}
-
 	line.Name = mi.Name
-	if err := mi.EnsurePriceUnchanged(item.PriceMinorSnapshot); err != nil {
-		line.Err = err
-		return line
+
+	if item.RescueOfferID != nil {
+		if err := s.applyRescuePricing(&line, *item.RescueOfferID, mi, lockedOffers, now); err != nil {
+			line.Err = err
+			return line
+		}
+	} else {
+		line.UnitPriceMinor = item.PriceMinorSnapshot
+		if err := mi.EnsurePriceUnchanged(item.PriceMinorSnapshot); err != nil {
+			line.Err = err
+			return line
+		}
 	}
+
 	line.Err = mi.EnsureAvailable(item.Quantity)
 	return line
+}
+
+// applyRescuePricing resolves a line whose cart snapshot assumed offerID.
+// Returns a RESCUE_OFFER_EXPIRED error if the offer's own window is no
+// longer valid (it was cancelled, or now falls outside [starts_at,
+// ends_at)) — the entire deal the cart remembered is gone, a different and
+// more fundamental problem than the offer simply running low. A live
+// window with less remaining stock than requested is NOT an error: it sets
+// line.RescueQuantity to whatever the offer can still cover (down to zero)
+// and lets domainorder.Checkout build the resulting split — PROMPT.md 5.5
+// describes exactly this outcome as a normal, successful order.
+func (s *CheckoutService) applyRescuePricing(line *domainorder.CheckoutLine, offerID uuid.UUID, mi domaincatalog.MenuItem, lockedOffers map[uuid.UUID]domaincatalog.RescueOffer, now time.Time) error {
+	line.UnitPriceMinor = mi.PriceMinor
+
+	offer, ok := lockedOffers[offerID]
+	if !ok || !offer.WindowValid(now) {
+		endsAt := offer.EndsAt
+		return errs.NewWithDetails(errs.CodeRescueOfferExpired,
+			fmt.Sprintf("the rescue offer for %q has ended", mi.Name),
+			[]map[string]any{{"menuItemId": mi.ID, "newPriceMinor": mi.PriceMinor, "offerEndedAt": endsAt}})
+	}
+
+	eligible := line.Quantity
+	if offer.RemainingQuantity < eligible {
+		eligible = offer.RemainingQuantity
+	}
+	line.RescueOfferID = &offerID
+	line.RescueQuantity = eligible
+	line.RescueUnitPriceMinor = offer.DiscountedPrice(mi.PriceMinor)
+	return nil
 }

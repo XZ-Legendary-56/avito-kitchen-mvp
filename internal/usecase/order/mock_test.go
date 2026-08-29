@@ -316,6 +316,74 @@ func (mr *MockOutboxRepositoryMockRecorder) Enqueue(ctx, e any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Enqueue", reflect.TypeOf((*MockOutboxRepository)(nil).Enqueue), ctx, e)
 }
 
+// MockRescueOfferRepository is a mock of RescueOfferRepository interface.
+type MockRescueOfferRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockRescueOfferRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockRescueOfferRepositoryMockRecorder is the mock recorder for MockRescueOfferRepository.
+type MockRescueOfferRepositoryMockRecorder struct {
+	mock *MockRescueOfferRepository
+}
+
+// NewMockRescueOfferRepository creates a new mock instance.
+func NewMockRescueOfferRepository(ctrl *gomock.Controller) *MockRescueOfferRepository {
+	mock := &MockRescueOfferRepository{ctrl: ctrl}
+	mock.recorder = &MockRescueOfferRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRescueOfferRepository) EXPECT() *MockRescueOfferRepositoryMockRecorder {
+	return m.recorder
+}
+
+// DecrementRemaining mocks base method.
+func (m *MockRescueOfferRepository) DecrementRemaining(ctx context.Context, id uuid.UUID, quantity int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecrementRemaining", ctx, id, quantity)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DecrementRemaining indicates an expected call of DecrementRemaining.
+func (mr *MockRescueOfferRepositoryMockRecorder) DecrementRemaining(ctx, id, quantity any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementRemaining", reflect.TypeOf((*MockRescueOfferRepository)(nil).DecrementRemaining), ctx, id, quantity)
+}
+
+// GetActiveForItems mocks base method.
+func (m *MockRescueOfferRepository) GetActiveForItems(ctx context.Context, menuItemIDs []uuid.UUID, now time.Time) (map[uuid.UUID]catalog.RescueOffer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveForItems", ctx, menuItemIDs, now)
+	ret0, _ := ret[0].(map[uuid.UUID]catalog.RescueOffer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveForItems indicates an expected call of GetActiveForItems.
+func (mr *MockRescueOfferRepositoryMockRecorder) GetActiveForItems(ctx, menuItemIDs, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveForItems", reflect.TypeOf((*MockRescueOfferRepository)(nil).GetActiveForItems), ctx, menuItemIDs, now)
+}
+
+// LockForCheckout mocks base method.
+func (m *MockRescueOfferRepository) LockForCheckout(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]catalog.RescueOffer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockForCheckout", ctx, ids)
+	ret0, _ := ret[0].(map[uuid.UUID]catalog.RescueOffer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockForCheckout indicates an expected call of LockForCheckout.
+func (mr *MockRescueOfferRepositoryMockRecorder) LockForCheckout(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockForCheckout", reflect.TypeOf((*MockRescueOfferRepository)(nil).LockForCheckout), ctx, ids)
+}
+
 // MockCartRepository is a mock of CartRepository interface.
 type MockCartRepository struct {
 	ctrl     *gomock.Controller
