@@ -12,13 +12,21 @@ import (
 // StockQty nil means unlimited stock, typical for items cooked to order;
 // a non-nil value is a hard cap that orders decrement.
 type MenuItem struct {
-	ID          uuid.UUID
-	VenueID     uuid.UUID
-	Name        string
-	Description string
-	PriceMinor  int64
-	IsAvailable bool
-	StockQty    *int
+	ID                 uuid.UUID
+	VenueID            uuid.UUID
+	CategoryID         uuid.UUID
+	Name               string
+	Description        string
+	PriceMinor         int64
+	IsAvailable        bool
+	StockQty           *int
+	CookingTimeMinutes int
+	// Source and ExternalID trace where this item's data comes from
+	// (PROMPT.md 9): "platform" items are managed by hand through the
+	// partner API, "integration" items are pushed by PUT /menu from the
+	// venue's own system and keep that system's id in ExternalID.
+	Source     string
+	ExternalID *string
 }
 
 // EnsureAvailable returns ITEM_UNAVAILABLE if the item was switched off by

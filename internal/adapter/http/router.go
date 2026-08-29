@@ -1,6 +1,6 @@
 // Package http assembles the top-level chi router: shared middleware, the
-// public API under /api/v1 (the partner API, adapter/http/partner, is
-// mounted here once stage 8 adds it), and operational plumbing.
+// public API under /api/v1, the partner API under /api/v1/partner, and
+// operational plumbing.
 package http
 
 import (
@@ -12,11 +12,14 @@ import (
 
 	"avito-kitchen/internal/adapter/http/httperr"
 	"avito-kitchen/internal/adapter/http/middleware"
+	"avito-kitchen/internal/adapter/http/partner"
 	"avito-kitchen/internal/adapter/http/public"
 	"avito-kitchen/internal/adapter/postgres"
+	"avito-kitchen/internal/generated/partnerapi"
 	"avito-kitchen/internal/generated/publicapi"
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
+	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 
 // NewRouter builds the full HTTP handler for the API service.
@@ -31,6 +34,7 @@ func NewRouter(logger *slog.Logger, pool *pgxpool.Pool) http.Handler {
 	r.Get("/readyz", handleReadyz(pool))
 
 	r.Mount("/api/v1", newPublicAPIRouter(pool))
+	r.Mount("/api/v1/partner", newPartnerAPIRouter(pool))
 
 	return r
 }
@@ -65,5 +69,36 @@ func newPublicAPIRouter(pool *pgxpool.Pool) http.Handler {
 	return publicapi.HandlerWithOptions(strictHandler, publicapi.ChiServerOptions{
 		BaseRouter:       apiRouter,
 		ErrorHandlerFunc: httperr.WriteRequestError,
+	})
+}
+
+// newPartnerAPIRouter wires the partner API. Every route requires
+// X-Api-Key (PROMPT.md 5.3 item 1), enforced by partner.APIKeyAuth before
+// any generated handler runs — it resolves the key to a venue and stores
+// it in the request context, which every Handlers method then reads
+// instead of taking a venue id as a request parameter.
+func newPartnerAPIRouter(pool *pgxpool.Pool) http.Handler {
+	venues := postgres.NewVenueRepository(pool)
+	menus := postgres.NewMenuRepository(pool)
+	orders := postgres.NewOrderRepository(pool)
+	auth := postgres.NewPartnerAuthRepository(pool)
+	txManager := postgres.NewTxManager(pool)
+
+	handlers := &partner.Handlers{
+		Venues: partnerusecase.NewVenueService(venues, txManager),
+		Menus:  partnerusecase.NewMenuService(menus),
+		Orders: partnerusecase.NewOrderService(orders),
+	}
+
+	strictHandler := partnerapi.NewStrictHandlerWithOptions(handlers, nil, partnerapi.StrictHTTPServerOptions{
+		RequestErrorHandlerFunc:  httperr.WritePartnerRequestError,
+		ResponseErrorHandlerFunc: httperr.WritePartner,
+	})
+
+	apiRouter := chi.NewRouter()
+	apiRouter.Use(partner.APIKeyAuth(partnerusecase.NewAuthService(auth)))
+	return partnerapi.HandlerWithOptions(strictHandler, partnerapi.ChiServerOptions{
+		BaseRouter:       apiRouter,
+		ErrorHandlerFunc: httperr.WritePartnerRequestError,
 	})
 }

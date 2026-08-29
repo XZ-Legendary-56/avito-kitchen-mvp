@@ -48,6 +48,11 @@ const (
 	CodeValidationError Code = "VALIDATION_ERROR"
 	CodeNotFound        Code = "NOT_FOUND"
 	CodeInternal        Code = "INTERNAL_ERROR"
+
+	// Partner API access control (PROMPT.md 5.3 item 1): missing, unknown
+	// or revoked X-Api-Key. Only meaningful on the partner API — the
+	// public API has no authentication to fail.
+	CodeUnauthorized Code = "UNAUTHORIZED"
 )
 
 // Error is a domain error: a stable Code plus a human-readable Message, an

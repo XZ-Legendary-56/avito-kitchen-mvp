@@ -52,9 +52,12 @@ seed:
 # overwritten, never hand-edited.
 generate:
 	go tool oapi-codegen -config api/openapi/publicapi.cfg.yaml api/openapi/public.yaml
+	go tool oapi-codegen -config api/openapi/partnerapi.cfg.yaml api/openapi/partner.yaml
 	go tool mockgen -source=internal/usecase/catalog/ports.go -destination=internal/usecase/catalog/mock_test.go -package=catalog_test
 	go tool mockgen -source=internal/usecase/order/ports.go -destination=internal/usecase/order/mock_test.go -package=order_test
 	go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/order/mock_txmanager_test.go -package=order_test
+	go tool mockgen -source=internal/usecase/partner/ports.go -destination=internal/usecase/partner/mock_test.go -package=partner_test
+	go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/partner/mock_txmanager_test.go -package=partner_test
 
 # Interim lint target for this stage: gofmt + go vet. Stage 12 replaces this
 # with golangci-lint once .golangci.yml (section 10.1 of PROMPT.md) is added.

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -11,10 +13,12 @@ import (
 
 	domainorder "avito-kitchen/internal/domain/order"
 	orderusecase "avito-kitchen/internal/usecase/order"
+	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 
-// OrderRepository implements orderusecase.OrderRepository on orders,
-// order_items and order_status_history.
+// OrderRepository implements orderusecase.OrderRepository and
+// partnerusecase.OrderRepository on orders, order_items and
+// order_status_history.
 type OrderRepository struct {
 	pool *pgxpool.Pool
 }
@@ -23,7 +27,10 @@ func NewOrderRepository(pool *pgxpool.Pool) *OrderRepository {
 	return &OrderRepository{pool: pool}
 }
 
-var _ orderusecase.OrderRepository = (*OrderRepository)(nil)
+var (
+	_ orderusecase.OrderRepository   = (*OrderRepository)(nil)
+	_ partnerusecase.OrderRepository = (*OrderRepository)(nil)
+)
 
 // Create inserts o, its items, and every entry already in o.History (at
 // minimum the one Order.New itself adds for the initial "created" state).
@@ -176,6 +183,103 @@ func (r *OrderRepository) AppendStatusChange(ctx context.Context, orderID uuid.U
 		INSERT INTO order_status_history (id, order_id, from_status, to_status, actor, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`, uuid.New(), orderID, fromStatus, string(change.To), string(change.Actor), change.CreatedAt); err != nil {
+		return fmt.Errorf("insert order status history: %w", err)
+	}
+	return nil
+}
+
+// ListForVenue returns venueID's orders, newest first. It fetches matching
+// ids in one query, then reuses Get per order for items/history — a small,
+// bounded N+1 (limit caps it at 200) rather than the kind PROMPT.md 6.6
+// forbids for the customer-facing catalog listing; this is a partner
+// polling endpoint, not a page a customer waits on.
+func (r *OrderRepository) ListForVenue(ctx context.Context, venueID uuid.UUID, status *domainorder.Status, since *time.Time, limit int) ([]domainorder.Order, error) {
+	q := QuerierFromContext(ctx, r.pool)
+
+	conditions := []string{"venue_id = $1"}
+	args := []any{venueID}
+	if status != nil {
+		args = append(args, string(*status))
+		conditions = append(conditions, fmt.Sprintf("status = $%d", len(args)))
+	}
+	if since != nil {
+		args = append(args, *since)
+		conditions = append(conditions, fmt.Sprintf("updated_at >= $%d", len(args)))
+	}
+	args = append(args, limit)
+	limitArg := len(args)
+
+	rows, err := q.Query(ctx, fmt.Sprintf(`
+		SELECT id FROM orders WHERE %s ORDER BY created_at DESC LIMIT $%d
+	`, strings.Join(conditions, " AND "), limitArg), args...)
+	if err != nil {
+		return nil, fmt.Errorf("query orders: %w", err)
+	}
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan order id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate orders: %w", err)
+	}
+
+	result := make([]domainorder.Order, 0, len(ids))
+	for _, id := range ids {
+		o, err := r.Get(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if o != nil {
+			result = append(result, *o)
+		}
+	}
+	return result, nil
+}
+
+// ApplyTransition persists o's mutable fields and appends its latest
+// History entry as a new order_status_history row.
+func (r *OrderRepository) ApplyTransition(ctx context.Context, o *domainorder.Order) error {
+	q := QuerierFromContext(ctx, r.pool)
+
+	var rejectionReason *string
+	if o.RejectionReason != "" {
+		rejectionReason = &o.RejectionReason
+	}
+	var externalOrderID *string
+	if o.ExternalOrderID != "" {
+		externalOrderID = &o.ExternalOrderID
+	}
+
+	tag, err := q.Exec(ctx, `
+		UPDATE orders SET status = $1, eta_minutes = $2, rejection_reason = $3, external_order_id = $4, updated_at = $5
+		WHERE id = $6
+	`, string(o.Status), o.ETAMinutes, rejectionReason, externalOrderID, o.UpdatedAt, o.ID)
+	if err != nil {
+		return fmt.Errorf("update order: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("order %s not found when applying transition", o.ID)
+	}
+
+	if len(o.History) == 0 {
+		return nil
+	}
+	change := o.History[len(o.History)-1]
+	var fromStatus *string
+	if change.From != nil {
+		s := string(*change.From)
+		fromStatus = &s
+	}
+	if _, err := q.Exec(ctx, `
+		INSERT INTO order_status_history (id, order_id, from_status, to_status, actor, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, uuid.New(), o.ID, fromStatus, string(change.To), string(change.Actor), change.CreatedAt); err != nil {
 		return fmt.Errorf("insert order status history: %w", err)
 	}
 	return nil

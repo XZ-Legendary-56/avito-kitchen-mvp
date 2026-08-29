@@ -16,6 +16,7 @@ import (
 	"avito-kitchen/internal/domain/errs"
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
+	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 
 const defaultVenuePageLimit = 20
@@ -36,6 +37,7 @@ func NewVenueRepository(pool *pgxpool.Pool) *VenueRepository {
 var (
 	_ catalogusecase.VenueRepository = (*VenueRepository)(nil)
 	_ orderusecase.VenueLookup       = (*VenueRepository)(nil)
+	_ partnerusecase.VenueRepository = (*VenueRepository)(nil)
 )
 
 // List returns a page of venues ordered by (name, id) — a stable tiebreak
@@ -106,7 +108,7 @@ func (r *VenueRepository) List(ctx context.Context, filter catalogusecase.ListVe
 	limitArg := len(args)
 
 	query := fmt.Sprintf(`
-		SELECT id, partner_id, name, description, cuisine, min_order_amount_minor, accepting_orders
+		SELECT id, partner_id, name, description, cuisine, min_order_amount_minor, accepting_orders, menu_version, webhook_url
 		FROM venues v
 		%s
 		ORDER BY name, id
@@ -123,7 +125,7 @@ func (r *VenueRepository) List(ctx context.Context, filter catalogusecase.ListVe
 	var venues []domaincatalog.Venue
 	for rows.Next() {
 		var v domaincatalog.Venue
-		if err := rows.Scan(&v.ID, &v.PartnerID, &v.Name, &v.Description, &v.Cuisine, &v.MinOrderAmountMinor, &v.AcceptingOrders); err != nil {
+		if err := rows.Scan(&v.ID, &v.PartnerID, &v.Name, &v.Description, &v.Cuisine, &v.MinOrderAmountMinor, &v.AcceptingOrders, &v.MenuVersion, &v.WebhookURL); err != nil {
 			return catalogusecase.VenuePage{}, fmt.Errorf("scan venue: %w", err)
 		}
 		venues = append(venues, v)
@@ -152,9 +154,9 @@ func (r *VenueRepository) GetByID(ctx context.Context, id uuid.UUID) (*domaincat
 
 	var v domaincatalog.Venue
 	err := q.QueryRow(ctx, `
-		SELECT id, partner_id, name, description, cuisine, min_order_amount_minor, accepting_orders
+		SELECT id, partner_id, name, description, cuisine, min_order_amount_minor, accepting_orders, menu_version, webhook_url
 		FROM venues WHERE id = $1
-	`, id).Scan(&v.ID, &v.PartnerID, &v.Name, &v.Description, &v.Cuisine, &v.MinOrderAmountMinor, &v.AcceptingOrders)
+	`, id).Scan(&v.ID, &v.PartnerID, &v.Name, &v.Description, &v.Cuisine, &v.MinOrderAmountMinor, &v.AcceptingOrders, &v.MenuVersion, &v.WebhookURL)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -186,6 +188,50 @@ func (r *VenueRepository) BumpMenuVersion(ctx context.Context, id uuid.UUID) err
 	}
 	if tag.RowsAffected() == 0 {
 		return errs.New(errs.CodeNotFound, "venue not found")
+	}
+	return nil
+}
+
+// UpdateProfile applies patch's non-nil fields, replacing the whole weekly
+// schedule when patch.Schedule is set. Both the profile row and the
+// schedule replace must land in the same transaction as each other — the
+// caller (partner.VenueService via TxManager) is what makes that true, by
+// wrapping this whole call so both statements share one QuerierFromContext
+// transaction.
+func (r *VenueRepository) UpdateProfile(ctx context.Context, id uuid.UUID, patch partnerusecase.VenueProfilePatch) error {
+	q := QuerierFromContext(ctx, r.pool)
+
+	tag, err := q.Exec(ctx, `
+		UPDATE venues SET
+			description = COALESCE($2, description),
+			accepting_orders = COALESCE($3, accepting_orders),
+			min_order_amount_minor = COALESCE($4, min_order_amount_minor),
+			webhook_url = COALESCE($5, webhook_url),
+			webhook_secret = COALESCE($6, webhook_secret),
+			updated_at = now()
+		WHERE id = $1
+	`, id, patch.Description, patch.AcceptingOrders, patch.MinOrderAmountMinor, patch.WebhookURL, patch.WebhookSecret)
+	if err != nil {
+		return fmt.Errorf("update venue profile: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errs.New(errs.CodeNotFound, "venue not found")
+	}
+
+	if patch.Schedule != nil {
+		if _, err := q.Exec(ctx, `DELETE FROM venue_schedules WHERE venue_id = $1`, id); err != nil {
+			return fmt.Errorf("clear venue schedule: %w", err)
+		}
+		for _, e := range *patch.Schedule {
+			opens := pgtype.Time{Microseconds: int64(e.OpensAt / time.Microsecond), Valid: true}
+			closes := pgtype.Time{Microseconds: int64(e.ClosesAt / time.Microsecond), Valid: true}
+			if _, err := q.Exec(ctx, `
+				INSERT INTO venue_schedules (id, venue_id, weekday, opens_at, closes_at)
+				VALUES ($1, $2, $3, $4, $5)
+			`, uuid.New(), id, isoWeekday(e.Weekday), opens, closes); err != nil {
+				return fmt.Errorf("insert venue schedule: %w", err)
+			}
+		}
 	}
 	return nil
 }

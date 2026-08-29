@@ -17,7 +17,15 @@ type Venue struct {
 	Cuisine             string
 	MinOrderAmountMinor int64
 	AcceptingOrders     bool
+	MenuVersion         int64
 	Schedule            []ScheduleEntry
+	// WebhookURL is where stage 9's outbox delivers order events, nil if
+	// the venue never set one. The signing secret is deliberately not a
+	// field here: it is shown to the partner exactly once, right after
+	// being generated, never read back (PROMPT.md 6.5 / partner.yaml
+	// PartnerVenueWithSecret) — carrying it on this widely-read type would
+	// make "don't leak it" a rule every future caller has to remember.
+	WebhookURL *string
 }
 
 // EnsureCanOrder returns VENUE_NOT_ACCEPTING_ORDERS or VENUE_CLOSED if the

@@ -3,26 +3,41 @@
 -- the venue-pasta-roma emulator through the partner API — seeding a menu for
 -- it here would just be overwritten and would hide a wiring bug if it wasn't).
 --
+-- One partner per venue (see README "Допущения и упрощения"): the partner
+-- API's X-Api-Key resolves to exactly one venue via partner_id, and
+-- partners.id has no other consumer that would need one partner to own
+-- several venues, so 1 partner = 1 venue keeps that resolution a plain
+-- lookup instead of needing a venue_id column on partner_api_keys too.
+--
 -- Every id is a fixed literal UUID and every insert ends in ON CONFLICT ...
 -- DO NOTHING, so running this script twice is safe and produces no duplicates.
 
 INSERT INTO partners (id, name) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'ООО «Вкусный Город»'),
-    ('00000000-0000-0000-0000-000000000002', 'Pasta Roma')
+    ('00000000-0000-0000-0000-000000000001', 'ИП «Пицца Мания»'),
+    ('00000000-0000-0000-0000-000000000002', 'ООО «Токио Вок»'),
+    ('00000000-0000-0000-0000-000000000003', 'ИП «Бургерная №1»'),
+    ('00000000-0000-0000-0000-000000000004', 'Pasta Roma')
 ON CONFLICT (id) DO NOTHING;
 
--- Raw keys (shown once here, never stored): partner-vkusny-gorod uses
--- "demo_vkusny_gorod_2026", partner-pasta-roma uses "demo_pasta_roma_2026".
+-- Raw keys (shown once here, never stored): one per venue below.
 -- key_hash is sha256(raw key), hex-encoded — see cmd/seed/main.go for why.
 INSERT INTO partner_api_keys (id, partner_id, key_hash, label) VALUES
     ('00000000-0000-0000-0000-000000000041',
      '00000000-0000-0000-0000-000000000001',
-     '7aac11a87c044a0b8cc6601451002482d64de1093189bb1df2f3686ac10e1303',
-     'demo key for Вкусный Город'),
+     'e0476d2161cb615c33dec65e3466c75593beb1e61f470c61f1a07ec4d7aa01f9',
+     'demo key for Пицца Мания (demo_pizza_mania_2026)'),
     ('00000000-0000-0000-0000-000000000042',
      '00000000-0000-0000-0000-000000000002',
+     'b488674a17bf6d52b8cd3b90a175a176f81f12dc54dfb4c61ec82923a6d55071',
+     'demo key for Токио Вок (demo_tokyo_wok_2026)'),
+    ('00000000-0000-0000-0000-000000000043',
+     '00000000-0000-0000-0000-000000000003',
+     '184345924a3a420099ebd520e092b22b2b130e17c99b21e376e298851247bcc5',
+     'demo key for Бургерная №1 (demo_burger_house_2026)'),
+    ('00000000-0000-0000-0000-000000000044',
+     '00000000-0000-0000-0000-000000000004',
      '5835b8146149b1794da8ed9a7046633e583dcf764eb41a5de02a4349be065d35',
-     'demo key for Pasta Roma')
+     'demo key for Pasta Roma (demo_pasta_roma_2026)')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO venues (id, partner_id, name, description, cuisine, min_order_amount_minor, source, external_id) VALUES
@@ -30,13 +45,13 @@ INSERT INTO venues (id, partner_id, name, description, cuisine, min_order_amount
      '00000000-0000-0000-0000-000000000001',
      'Пицца Мания', 'Пицца на тонком тесте и доставка от 30 минут', 'Пицца', 50000, 'platform', NULL),
     ('00000000-0000-0000-0000-000000000012',
-     '00000000-0000-0000-0000-000000000001',
+     '00000000-0000-0000-0000-000000000002',
      'Токио Вок', 'Роллы и wok-лапша', 'Азиатская кухня', 40000, 'platform', NULL),
     ('00000000-0000-0000-0000-000000000013',
-     '00000000-0000-0000-0000-000000000001',
+     '00000000-0000-0000-0000-000000000003',
      'Бургерная №1', 'Бургеры и картофель фри', 'Бургеры', 30000, 'platform', NULL),
     ('00000000-0000-0000-0000-000000000014',
-     '00000000-0000-0000-0000-000000000002',
+     '00000000-0000-0000-0000-000000000004',
      'Pasta Roma', 'Итальянская кухня, меню приходит из внешней системы заведения', 'Итальянская кухня', 0, 'integration', 'pasta-roma-venue')
 ON CONFLICT (id) DO NOTHING;
 

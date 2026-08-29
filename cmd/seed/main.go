@@ -46,7 +46,9 @@ func run() error {
 	}
 
 	log.Info("seed data applied",
-		"demo_api_key_vkusny_gorod", "demo_vkusny_gorod_2026",
+		"demo_api_key_pizza_mania", "demo_pizza_mania_2026",
+		"demo_api_key_tokyo_wok", "demo_tokyo_wok_2026",
+		"demo_api_key_burger_house", "demo_burger_house_2026",
 		"demo_api_key_pasta_roma", "demo_pasta_roma_2026",
 	)
 	return nil
