@@ -738,5 +738,54 @@ make seed                 # накатить демо-данные на лока
 руками не редактируются. CI (`.github/workflows/ci.yml`) проверяет это отдельным
 шагом: гоняет `make generate` и падает, если появился `git diff`.
 
+**Если `make` не установлен** — в Windows его нет по умолчанию ни в обычном
+`cmd`/PowerShell, ни в Git Bash — эквивалентные команды прямым текстом, копируются
+и работают на любой системе с установленным Go 1.23+ (и Docker для
+`test-integration`/`docs`):
+
+```bash
+# make build
+go build ./...
+go build venue-pasta-roma/...
+
+# make test
+go test ./...
+go test venue-pasta-roma/...
+
+# make test-integration
+go test -tags=integration ./test/integration/... -v
+
+# make lint (нужен установленный golangci-lint v1.62+)
+golangci-lint run --build-tags=integration ./...
+cd external/venue-pasta-roma && golangci-lint run --build-tags=integration ./... && cd ../..
+
+# make generate
+go tool oapi-codegen -config api/openapi/publicapi.cfg.yaml api/openapi/public.yaml
+go tool oapi-codegen -config api/openapi/partnerapi.cfg.yaml api/openapi/partner.yaml
+go tool oapi-codegen -config api/openapi/partnerclient.cfg.yaml api/openapi/partner.yaml
+go tool mockgen -source=internal/usecase/catalog/ports.go -destination=internal/usecase/catalog/mock_test.go -package=catalog_test
+go tool mockgen -source=internal/usecase/order/ports.go -destination=internal/usecase/order/mock_test.go -package=order_test
+go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/order/mock_txmanager_test.go -package=order_test
+go tool mockgen -source=internal/usecase/partner/ports.go -destination=internal/usecase/partner/mock_test.go -package=partner_test
+go tool mockgen -source=internal/usecase/txmanager.go -destination=internal/usecase/partner/mock_txmanager_test.go -package=partner_test
+go tool mockgen -source=internal/usecase/outbox/ports.go -destination=internal/usecase/outbox/mock_test.go -package=outbox_test
+go tool mockgen -source=internal/adapter/webhook/publisher.go -destination=internal/adapter/webhook/mock_test.go -package=webhook_test
+
+# make docs — в Git Bash на Windows добавьте спереди MSYS_NO_PATHCONV=1,
+# иначе MSYS сам подменит "/docs" на путь вида "C:/Program Files/Git/docs"
+# и Docker откажется его создавать (реально встретившаяся на этом проекте ошибка)
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/docs:/docs" -w /docs plantuml/plantuml -tpng -o /docs/img c4 cjm erd.puml
+
+# make check — generate, затем убедиться, что git ничего не увидел, затем lint и test
+# (см. выше три блока) по очереди
+git status --porcelain   # должно быть пусто после generate
+
+# make migrate-up / migrate-down / migrate-status (порт 5434 — см. раздел 2.3)
+DB_HOST=localhost DB_PORT=5434 DB_USER=avito_kitchen DB_PASSWORD=avito_kitchen DB_NAME=avito_kitchen DB_SSLMODE=disable go run ./cmd/migrate up
+
+# make seed
+DB_HOST=localhost DB_PORT=5434 DB_USER=avito_kitchen DB_PASSWORD=avito_kitchen DB_NAME=avito_kitchen DB_SSLMODE=disable go run ./cmd/seed
+```
+
 Полный список библиотек, версий стека и обоснование каждого решения по инфраструктуре
 и качеству кода — в [`PROMPT.md`](PROMPT.md), разделы 4, 10 и 11.
