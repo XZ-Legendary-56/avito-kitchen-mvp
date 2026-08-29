@@ -49,7 +49,7 @@ type orderCreatedPayload struct {
 type orderCancelledPayload struct {
 	OrderID     uuid.UUID `json:"order_id"`
 	VenueID     uuid.UUID `json:"venue_id"`
-	CancelledAt time.Time `json:"cancelled_at"`
+	CancelledAt time.Time `json:"canceled_at"`
 }
 
 // newOrderCreatedEvent builds the OutboxEvent for o, ready for

@@ -6,15 +6,14 @@
 package main
 
 import (
+	"avito-kitchen/internal/config"
+	"avito-kitchen/internal/platform/logger"
+	"avito-kitchen/internal/platform/pgpool"
 	"context"
 	_ "embed"
 	"fmt"
 	"log/slog"
 	"os"
-
-	"avito-kitchen/internal/config"
-	"avito-kitchen/internal/platform/logger"
-	"avito-kitchen/internal/platform/pgpool"
 )
 
 //go:embed seed.sql

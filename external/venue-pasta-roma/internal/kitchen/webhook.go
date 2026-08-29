@@ -11,10 +11,9 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+	"venue-pasta-roma/internal/generated/partnerclient"
 
 	"github.com/google/uuid"
-
-	"venue-pasta-roma/internal/generated/partnerclient"
 )
 
 // envelope mirrors PROMPT.md 6.5's fixed event format exactly — this
@@ -240,5 +239,5 @@ func (h *Handler) handleOrderCancelled(raw json.RawMessage) {
 		return
 	}
 	h.state.ReleaseStock(items)
-	h.logger.Info("order cancelled", "order_id", p.OrderID)
+	h.logger.Info("order canceled", "order_id", p.OrderID)
 }

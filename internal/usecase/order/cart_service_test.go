@@ -1,6 +1,8 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/order"
 	"context"
 	"errors"
 	"testing"
@@ -11,9 +13,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase/order"
 )
 
 // passthroughTx makes m.WithinTx just call fn with the given ctx, the same

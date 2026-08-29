@@ -1,6 +1,8 @@
 package partner_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/partner"
 	"context"
 	"testing"
 
@@ -10,8 +12,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/usecase/partner"
 )
 
 // passthroughTx makes m.WithinTx just call fn with the given ctx — these

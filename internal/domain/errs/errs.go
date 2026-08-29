@@ -57,7 +57,7 @@ const (
 	// Rescue offers (PROMPT.md 5.5). The first three are partner-side
 	// creation failures; the last is a public-API checkout conflict — the
 	// specific offer a cart line's price was based on is entirely gone
-	// (window ended or cancelled) by the time the order is placed. Partial
+	// (window ended or canceled) by the time the order is placed. Partial
 	// depletion (some units still get the discount, the rest do not) is
 	// deliberately NOT an error of its own: it succeeds as a split order
 	// with two line items, per PROMPT.md 5.5's own description of the

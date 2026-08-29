@@ -6,13 +6,14 @@
 package public
 
 import (
+	"avito-kitchen/internal/generated/publicapi"
 	"time"
 
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/generated/publicapi"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 )

@@ -1,11 +1,10 @@
 package catalog
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // RescueOffer is a time-boxed discount on a fixed quantity of one menu item
@@ -25,7 +24,7 @@ type RescueOffer struct {
 }
 
 // WindowValid reports whether the offer's own time window is currently
-// open and it has not been cancelled — deliberately separate from
+// open and it has not been canceled — deliberately separate from
 // RemainingQuantity: checkout treats "the window itself ended" (a whole
 // different deal than the one the customer's cart remembered,
 // RESCUE_OFFER_EXPIRED) very differently from "the window is fine but the

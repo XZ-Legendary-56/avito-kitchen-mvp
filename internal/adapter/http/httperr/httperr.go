@@ -6,14 +6,13 @@
 package httperr
 
 import (
-	"encoding/json"
-	"log/slog"
-	"net/http"
-
 	"avito-kitchen/internal/adapter/http/middleware"
 	"avito-kitchen/internal/domain/errs"
 	"avito-kitchen/internal/generated/partnerapi"
 	"avito-kitchen/internal/generated/publicapi"
+	"encoding/json"
+	"log/slog"
+	"net/http"
 )
 
 // statusFor maps a domain error Code to its HTTP status, per the table in

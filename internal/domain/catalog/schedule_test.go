@@ -1,13 +1,12 @@
 package catalog_test
 
 import (
+	"avito-kitchen/internal/domain/catalog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/catalog"
 )
 
 // mondayNineToTen is a schedule open only Monday 09:00-10:00, used to probe

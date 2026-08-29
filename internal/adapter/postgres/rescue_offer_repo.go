@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"errors"
 	"fmt"
@@ -12,20 +13,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 
+// cancelledAtColumn is rescue_offers' own cancellation-timestamp column.
+// PROMPT.md 5.5 spells it the British way, which misspell's US locale would
+// otherwise flag (and "fix" into a column that does not exist) everywhere
+// it appears, so the literal only lives here once and every query below
+// references this constant instead of spelling the column out again.
+const cancelledAtColumn = "cancelled_at" //nolint:misspell // PROMPT.md 5.5 mandates this exact column name
+
 // rescueOfferColumns is every column shared by rescue_offers reads in this
 // file, kept in one place so the SELECT list and its Scan targets never
 // drift apart (same reasoning as menu_repo.go's menuItemColumns).
-const rescueOfferColumns = "id, venue_id, menu_item_id, discount_percent, initial_quantity, remaining_quantity, starts_at, ends_at, cancelled_at"
+const rescueOfferColumns = "id, venue_id, menu_item_id, discount_percent, initial_quantity, remaining_quantity, starts_at, ends_at, " + cancelledAtColumn
 
 func scanRescueOffer(row interface {
 	Scan(dest ...any) error
-}, o *domaincatalog.RescueOffer) error {
+}, o *domaincatalog.RescueOffer,
+) error {
 	return row.Scan(&o.ID, &o.VenueID, &o.MenuItemID, &o.DiscountPercent, &o.InitialQuantity,
 		&o.RemainingQuantity, &o.StartsAt, &o.EndsAt, &o.CancelledAt)
 }
@@ -64,7 +73,7 @@ func (r *RescueOfferRepository) GetActiveForItems(ctx context.Context, menuItemI
 		SELECT `+rescueOfferColumns+`
 		FROM rescue_offers
 		WHERE menu_item_id = ANY($1)
-		  AND cancelled_at IS NULL
+		  AND `+cancelledAtColumn+` IS NULL
 		  AND remaining_quantity > 0
 		  AND $2 >= starts_at AND $2 < ends_at
 	`, menuItemIDs, now)
@@ -147,7 +156,7 @@ func (r *RescueOfferRepository) ListActiveFeed(ctx context.Context, cursor strin
 	}
 
 	conditions := []string{
-		"ro.cancelled_at IS NULL",
+		"ro." + cancelledAtColumn + " IS NULL",
 		"ro.remaining_quantity > 0",
 		"$1 >= ro.starts_at AND $1 < ro.ends_at",
 		"mi.is_available",
@@ -170,7 +179,7 @@ func (r *RescueOfferRepository) ListActiveFeed(ctx context.Context, cursor strin
 
 	query := fmt.Sprintf(`
 		SELECT ro.id, ro.venue_id, ro.menu_item_id, ro.discount_percent, ro.initial_quantity,
-		       ro.remaining_quantity, ro.starts_at, ro.ends_at, ro.cancelled_at,
+		       ro.remaining_quantity, ro.starts_at, ro.ends_at, ro.`+cancelledAtColumn+`,
 		       v.name, mi.name, mi.price_minor
 		FROM rescue_offers ro
 		JOIN menu_items mi ON mi.id = ro.menu_item_id
@@ -219,7 +228,7 @@ func (r *RescueOfferRepository) List(ctx context.Context, venueID uuid.UUID, act
 	args := []any{venueID}
 	if activeOnly {
 		args = append(args, now)
-		query += ` AND cancelled_at IS NULL AND remaining_quantity > 0 AND $2 >= starts_at AND $2 < ends_at`
+		query += ` AND ` + cancelledAtColumn + ` IS NULL AND remaining_quantity > 0 AND $2 >= starts_at AND $2 < ends_at`
 	}
 	query += ` ORDER BY created_at DESC`
 
@@ -265,15 +274,15 @@ func (r *RescueOfferRepository) Create(ctx context.Context, o domaincatalog.Resc
 	return &created, nil
 }
 
-// Cancel sets cancelled_at, returning errs.CodeNotFound if offerID does not
-// exist, does not belong to venueID, or is already cancelled — a second
-// cancel of the same offer has nothing left to do, so it is reported the
-// same as one that was never there.
+// Cancel sets the offer's cancellation timestamp, returning
+// errs.CodeNotFound if offerID does not exist, does not belong to venueID,
+// or is already canceled — a second cancel of the same offer has nothing
+// left to do, so it is reported the same as one that was never there.
 func (r *RescueOfferRepository) Cancel(ctx context.Context, venueID, offerID uuid.UUID, now time.Time) error {
 	q := QuerierFromContext(ctx, r.pool)
 	tag, err := q.Exec(ctx, `
-		UPDATE rescue_offers SET cancelled_at = $3
-		WHERE id = $1 AND venue_id = $2 AND cancelled_at IS NULL
+		UPDATE rescue_offers SET `+cancelledAtColumn+` = $3
+		WHERE id = $1 AND venue_id = $2 AND `+cancelledAtColumn+` IS NULL
 	`, offerID, venueID, now)
 	if err != nil {
 		return fmt.Errorf("cancel rescue offer: %w", err)

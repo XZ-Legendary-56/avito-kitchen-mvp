@@ -1,13 +1,12 @@
 package catalog_test
 
 import (
+	"avito-kitchen/internal/domain/catalog"
+	"avito-kitchen/internal/domain/errs"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
 )
 
 func intPtr(v int) *int { return &v }

@@ -1,11 +1,10 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/order"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"avito-kitchen/internal/domain/order"
 )
 
 func TestHashCheckoutRequest_SameInputSameHash(t *testing.T) {

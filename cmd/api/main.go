@@ -3,6 +3,10 @@
 package main
 
 import (
+	"avito-kitchen/internal/config"
+	"avito-kitchen/internal/platform/httpserver"
+	"avito-kitchen/internal/platform/logger"
+	"avito-kitchen/internal/platform/pgpool"
 	"context"
 	"fmt"
 	"log/slog"
@@ -12,10 +16,6 @@ import (
 	"syscall"
 
 	adapterhttp "avito-kitchen/internal/adapter/http"
-	"avito-kitchen/internal/config"
-	"avito-kitchen/internal/platform/httpserver"
-	"avito-kitchen/internal/platform/logger"
-	"avito-kitchen/internal/platform/pgpool"
 )
 
 func main() {

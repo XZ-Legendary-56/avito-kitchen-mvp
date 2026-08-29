@@ -1,15 +1,16 @@
 package partner
 
 import (
+	"avito-kitchen/internal/adapter/http/middleware"
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/generated/partnerapi"
 	"context"
 	"errors"
 
 	"github.com/google/uuid"
 
-	"avito-kitchen/internal/adapter/http/middleware"
-	"avito-kitchen/internal/domain/errs"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/generated/partnerapi"
+
 	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 

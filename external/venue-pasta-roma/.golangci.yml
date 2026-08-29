@@ -1,0 +1,53 @@
+run:
+  timeout: 5m
+
+output:
+  formats:
+    - format: colored-line-number
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - gosec
+    - gocritic
+    - ineffassign
+    - unused
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    - sloglint
+    - errorlint
+    - nilerr
+    - contextcheck
+    - depguard
+    - misspell
+    - gofumpt
+    - goimports
+
+linters-settings:
+  misspell:
+    locale: US
+
+  gosec:
+    excludes:
+      - G104 # unchecked errors: errcheck already owns this
+
+  depguard:
+    rules:
+      main:
+        files:
+          - "**/*.go"
+        deny:
+          - pkg: "avito-kitchen"
+            desc: "venue-pasta-roma is a standalone module that emulates an external partner system; it must not depend on the platform module (PROMPT.md 8.1)"
+
+issues:
+  exclude-dirs:
+    - internal/generated
+  max-issues-per-linter: 0
+  max-same-issues: 0

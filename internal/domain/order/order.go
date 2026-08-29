@@ -1,11 +1,10 @@
 package order
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // Item is one line of a placed order. Name and price are copied at order
@@ -127,7 +126,7 @@ func (o *Order) Reject(reason string, now time.Time) error {
 
 // Cancel transitions the order to StatusCancelled on the customer's behalf.
 // The state machine (status.go) already limits this to StatusCreated and
-// StatusConfirmed, matching "customer cancelled, only before cooking"
+// StatusConfirmed, matching "customer canceled, only before cooking"
 // (PROMPT.md 5.4) without this method needing to know that rule itself.
 func (o *Order) Cancel(now time.Time) error {
 	return o.TransitionTo(StatusCancelled, ActorCustomer, now)

@@ -12,7 +12,7 @@ import (
 )
 
 // Server is an http.Server that stops accepting new connections and waits
-// for in-flight requests to finish when its context is cancelled.
+// for in-flight requests to finish when its context is canceled.
 type Server struct {
 	httpServer *http.Server
 	logger     *slog.Logger
@@ -35,7 +35,7 @@ func New(addr string, handler http.Handler, logger *slog.Logger) *Server {
 	}
 }
 
-// Run serves until ctx is cancelled (SIGTERM/SIGINT), then shuts down and
+// Run serves until ctx is canceled (SIGTERM/SIGINT), then shuts down and
 // waits up to shutdownTimeout for in-flight requests to finish.
 func (s *Server) Run(ctx context.Context, shutdownTimeout time.Duration) error {
 	errCh := make(chan error, 1)
@@ -55,7 +55,13 @@ func (s *Server) Run(ctx context.Context, shutdownTimeout time.Duration) error {
 	}
 
 	s.logger.Info("http server shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	// ctx is already Done here — that is what got us to this line — so a
+	// timeout derived directly from it would expire immediately, and
+	// Shutdown would never get its grace period. context.WithoutCancel
+	// keeps ctx's values but drops its own cancellation, which is exactly
+	// what a bounded cleanup step after the parent's lifetime has ended
+	// needs.
+	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {

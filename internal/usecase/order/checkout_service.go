@@ -1,6 +1,8 @@
 package order
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase"
 	"context"
 	"fmt"
 	"time"
@@ -8,9 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase"
 )
 
 // idempotencyKeyTTL is how long an Idempotency-Key is honored. PROMPT.md
@@ -31,13 +32,13 @@ type CheckoutService struct {
 	venues       VenueLookup
 	menuItems    MenuItemLookup
 	rescueOffers RescueOfferRepository
-	orders       OrderRepository
+	orders       Repository
 	idempotency  IdempotencyRepository
 	outbox       OutboxRepository
 	txManager    usecase.TxManager
 }
 
-func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, rescueOffers RescueOfferRepository, orders OrderRepository, idempotency IdempotencyRepository, outbox OutboxRepository, txManager usecase.TxManager) *CheckoutService {
+func NewCheckoutService(carts CartRepository, venues VenueLookup, menuItems MenuItemLookup, rescueOffers RescueOfferRepository, orders Repository, idempotency IdempotencyRepository, outbox OutboxRepository, txManager usecase.TxManager) *CheckoutService {
 	return &CheckoutService{carts: carts, venues: venues, menuItems: menuItems, rescueOffers: rescueOffers, orders: orders, idempotency: idempotency, outbox: outbox, txManager: txManager}
 }
 
@@ -253,7 +254,7 @@ func (s *CheckoutService) buildCheckoutLine(item domainorder.CartItem, locked ma
 
 // applyRescuePricing resolves a line whose cart snapshot assumed offerID.
 // Returns a RESCUE_OFFER_EXPIRED error if the offer's own window is no
-// longer valid (it was cancelled, or now falls outside [starts_at,
+// longer valid (it was canceled, or now falls outside [starts_at,
 // ends_at)) — the entire deal the cart remembered is gone, a different and
 // more fundamental problem than the offer simply running low. A live
 // window with less remaining stock than requested is NOT an error: it sets

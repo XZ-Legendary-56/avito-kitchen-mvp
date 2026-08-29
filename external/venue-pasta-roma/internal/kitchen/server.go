@@ -3,10 +3,9 @@ package kitchen
 import (
 	"encoding/json"
 	"net/http"
+	"venue-pasta-roma/internal/generated/partnerclient"
 
 	"github.com/go-chi/chi/v5"
-
-	"venue-pasta-roma/internal/generated/partnerclient"
 )
 
 // NewRouter wires this venue's own tiny HTTP API (PROMPT.md 8.2): the
@@ -24,7 +23,7 @@ func (h *Handler) NewRouter() http.Handler {
 // handleListOrders is GET /kitchen/orders — "the kitchen's own feed",
 // PROMPT.md 8.2's stand-in for the internal interface a real restaurant's
 // staff would look at.
-func (h *Handler) handleListOrders(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleListOrders(w http.ResponseWriter, _ *http.Request) {
 	orders := h.state.ListOrders()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(orders); err != nil {

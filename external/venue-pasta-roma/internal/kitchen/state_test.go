@@ -108,7 +108,7 @@ func TestOrderLifecycle_AddGetListCancel(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, items, 1)
 	assert.Equal(t, itemID, items[0].PlatformMenuItemID)
-	assert.Equal(t, "cancelled", s.GetOrder(orderID).Status)
+	assert.Equal(t, "canceled", s.GetOrder(orderID).Status)
 }
 
 func TestCancelOrder_UntrackedOrder_NotOK(t *testing.T) {
@@ -154,7 +154,7 @@ func TestCancelOrder_ClearsPendingRetry(t *testing.T) {
 
 	require.True(t, ok)
 	got := s.GetOrder(orderID)
-	assert.Equal(t, PendingNone, got.Pending, "a cancelled order must not still be retried")
+	assert.Equal(t, PendingNone, got.Pending, "a canceled order must not still be retried")
 	assert.True(t, got.NextRetryAt.IsZero())
 }
 
@@ -206,7 +206,7 @@ func TestActiveOrderCount_ExcludesTerminalStatuses(t *testing.T) {
 	s.AddOrder(Order{ID: uuid.New(), Status: "cooking"})
 	s.AddOrder(Order{ID: uuid.New(), Status: "delivered"})
 	s.AddOrder(Order{ID: uuid.New(), Status: "rejected"})
-	s.AddOrder(Order{ID: uuid.New(), Status: "cancelled"})
+	s.AddOrder(Order{ID: uuid.New(), Status: "canceled"})
 
 	assert.Equal(t, 2, s.ActiveOrderCount())
 }

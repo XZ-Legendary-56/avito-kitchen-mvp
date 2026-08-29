@@ -1,13 +1,12 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/domain/order"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/domain/order"
 )
 
 // allStatuses lists every order.Status so the tests below can check the

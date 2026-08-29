@@ -1,6 +1,8 @@
 package catalog_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/catalog"
 	"context"
 	"errors"
 	"testing"
@@ -13,8 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/usecase/catalog"
 )
 
 func TestListVenues_MapsPageAndComputesDisplayFields(t *testing.T) {

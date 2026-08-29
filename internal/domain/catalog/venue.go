@@ -1,11 +1,10 @@
 package catalog
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // Venue is a restaurant on the platform (PROMPT.md 9: venues).

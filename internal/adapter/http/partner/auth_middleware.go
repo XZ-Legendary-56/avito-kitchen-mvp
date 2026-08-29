@@ -4,14 +4,13 @@
 package partner
 
 import (
+	"avito-kitchen/internal/adapter/http/httperr"
+	"avito-kitchen/internal/adapter/http/middleware"
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"net/http"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/adapter/http/httperr"
-	"avito-kitchen/internal/adapter/http/middleware"
-	"avito-kitchen/internal/domain/errs"
 )
 
 // authenticator is the one method Handlers.APIKeyAuth needs — satisfied by

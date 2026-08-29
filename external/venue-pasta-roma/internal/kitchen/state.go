@@ -33,7 +33,7 @@ type MenuItem struct {
 }
 
 // OrderItem is one line of a tracked order — enough to give stock back if
-// the order is later cancelled.
+// the order is later canceled.
 type OrderItem struct {
 	PlatformMenuItemID uuid.UUID
 	Name               string
@@ -160,7 +160,7 @@ func (s *State) CheckAndReserve(items []OrderItem) (ok bool) {
 }
 
 // ReleaseStock puts items' quantities back — called when an accepted order
-// is later cancelled.
+// is later canceled.
 func (s *State) ReleaseStock(items []OrderItem) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -263,7 +263,7 @@ func (s *State) ActiveOrderCount() int {
 	count := 0
 	for _, o := range s.orders {
 		switch o.Status {
-		case "delivered", "rejected", "cancelled":
+		case "delivered", "rejected", "canceled":
 		default:
 			count++
 		}
@@ -338,7 +338,7 @@ func (s *State) ScheduleRetry(orderID uuid.UUID, nextRetryAt time.Time) {
 	}
 }
 
-// CancelOrder marks a tracked order cancelled and stops any further
+// CancelOrder marks a tracked order canceled and stops any further
 // automatic advance or pending-action retry. Returns the order's items
 // (for stock release) and whether it was tracked at all.
 func (s *State) CancelOrder(orderID uuid.UUID) (items []OrderItem, ok bool) {
@@ -348,7 +348,7 @@ func (s *State) CancelOrder(orderID uuid.UUID) (items []OrderItem, ok bool) {
 	if !ok {
 		return nil, false
 	}
-	o.Status = "cancelled"
+	o.Status = "canceled"
 	o.NextAdvanceAt = time.Time{}
 	o.Pending = PendingNone
 	o.NextRetryAt = time.Time{}

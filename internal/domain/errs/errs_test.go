@@ -1,13 +1,12 @@
 package errs_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 func TestNew(t *testing.T) {

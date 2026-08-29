@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
 	"venue-pasta-roma/internal/generated/partnerclient"
 )
 
@@ -58,11 +57,11 @@ func newFakePlatform(t *testing.T) *fakePlatform {
 		f.advanceCalls = append(f.advanceCalls, r.PathValue("id"))
 		writeEmptyJSON(w)
 	})
-	mux.HandleFunc("POST /menu/availability", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /menu/availability", func(w http.ResponseWriter, _ *http.Request) {
 		f.availUpdates++
 		writeEmptyJSON(w)
 	})
-	mux.HandleFunc("PUT /menu", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /menu", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if f.menuResponse == nil {

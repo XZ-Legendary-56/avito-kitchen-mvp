@@ -1,14 +1,13 @@
 package catalog_test
 
 import (
+	"avito-kitchen/internal/domain/catalog"
+	"avito-kitchen/internal/domain/errs"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
 )
 
 func openMondayNineToTen() catalog.Venue {

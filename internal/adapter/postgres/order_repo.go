@@ -16,7 +16,7 @@ import (
 	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 
-// OrderRepository implements orderusecase.OrderRepository and
+// OrderRepository implements orderusecase.Repository and
 // partnerusecase.OrderRepository on orders, order_items and
 // order_status_history.
 type OrderRepository struct {
@@ -28,7 +28,7 @@ func NewOrderRepository(pool *pgxpool.Pool) *OrderRepository {
 }
 
 var (
-	_ orderusecase.OrderRepository   = (*OrderRepository)(nil)
+	_ orderusecase.Repository        = (*OrderRepository)(nil)
 	_ partnerusecase.OrderRepository = (*OrderRepository)(nil)
 )
 

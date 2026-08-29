@@ -1,6 +1,8 @@
 package webhook_test
 
 import (
+	"avito-kitchen/internal/adapter/webhook"
+	"avito-kitchen/internal/usecase/outbox"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,9 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-	"avito-kitchen/internal/adapter/webhook"
-	"avito-kitchen/internal/usecase/outbox"
 )
 
 const testSecret = "shh-its-a-secret"
@@ -88,7 +87,7 @@ func TestPublisher_Publish_NonSuccessStatus_IsAnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	venues := NewMockVenueWebhookLookup(ctrl)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()

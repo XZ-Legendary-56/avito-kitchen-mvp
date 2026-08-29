@@ -150,7 +150,7 @@ type RescueOfferRepository interface {
 	// requests (PROMPT.md 5.5), so this method's only job is translating
 	// that constraint violation into the domain error.
 	Create(ctx context.Context, o domaincatalog.RescueOffer) (*domaincatalog.RescueOffer, error)
-	// Cancel sets cancelled_at on the offer, returning errs.CodeNotFound if
+	// Cancel sets canceled_at on the offer, returning errs.CodeNotFound if
 	// offerID does not exist or does not belong to venueID.
 	Cancel(ctx context.Context, venueID, offerID uuid.UUID, now time.Time) error
 }

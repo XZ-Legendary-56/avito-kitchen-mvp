@@ -1,13 +1,13 @@
 package partner
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
-	"avito-kitchen/internal/domain/errs"
 	domainorder "avito-kitchen/internal/domain/order"
 )
 

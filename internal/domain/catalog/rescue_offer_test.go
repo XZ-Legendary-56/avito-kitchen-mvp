@@ -1,14 +1,13 @@
 package catalog_test
 
 import (
+	"avito-kitchen/internal/domain/catalog"
+	"avito-kitchen/internal/domain/errs"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
 )
 
 // TestRescueOffer_DiscountedPrice_RoundsDown is PROMPT.md 5.5's own
@@ -55,10 +54,10 @@ func TestRescueOffer_WindowValid(t *testing.T) {
 	atEndsAt.EndsAt = now
 	assert.False(t, atEndsAt.WindowValid(now), "ends_at is exclusive")
 
-	cancelled := base
+	canceled := base
 	cancelledAt := now.Add(-time.Minute)
-	cancelled.CancelledAt = &cancelledAt
-	assert.False(t, cancelled.WindowValid(now), "a cancelled offer is never window-valid, even mid-window")
+	canceled.CancelledAt = &cancelledAt
+	assert.False(t, canceled.WindowValid(now), "a canceled offer is never window-valid, even mid-window")
 }
 
 func TestRescueOffer_IsActive_AlsoRequiresRemainingStock(t *testing.T) {

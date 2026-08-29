@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"time"
-
 	"venue-pasta-roma/internal/generated/partnerclient"
 )
 
@@ -102,7 +101,7 @@ func retryPendingActions(ctx context.Context, client *partnerclient.ClientWithRe
 
 // RunStockSync periodically pushes this venue's own stock numbers to the
 // platform (PROMPT.md 8.2 item 4: "раз в 30 секунд синхронизирует остатки
-// в платформу") until ctx is cancelled.
+// в платформу") until ctx is canceled.
 func RunStockSync(ctx context.Context, client *partnerclient.ClientWithResponses, state *State, interval time.Duration, logger *slog.Logger) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

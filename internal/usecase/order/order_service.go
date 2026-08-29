@@ -1,36 +1,42 @@
 package order
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 
-	"avito-kitchen/internal/domain/errs"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase"
 )
 
-// OrderService answers order status queries and cancellation (PROMPT.md
-// 5.1 items 5-6). It is separate from CheckoutService: placing an order
+// Service answers order status queries and cancellation (PROMPT.md 5.1
+// items 5-6). It is separate from CheckoutService: placing an order
 // touches the cart, the catalog and stock; these two operations only ever
 // touch the order itself.
-type OrderService struct {
-	orders    OrderRepository
+type Service struct {
+	orders    Repository
 	outbox    OutboxRepository
 	txManager usecase.TxManager
 }
 
-func NewOrderService(orders OrderRepository, outbox OutboxRepository, txManager usecase.TxManager) *OrderService {
-	return &OrderService{orders: orders, outbox: outbox, txManager: txManager}
+// NewOrderService keeps its own descriptive name (rather than plain New)
+// so it reads consistently alongside this package's other constructors,
+// NewCartService and NewCheckoutService, even though its return type is
+// just Service — order is this whole package's own subject, so Service
+// unqualified is what it is, but the constructor still says which of the
+// package's three services it builds.
+func NewOrderService(orders Repository, outbox OutboxRepository, txManager usecase.TxManager) *Service {
+	return &Service{orders: orders, outbox: outbox, txManager: txManager}
 }
 
 // GetOrder returns clientID's order, or errs.CodeNotFound if orderID does
 // not exist or belongs to a different client — the two are reported
 // identically on purpose, so a client can never use this endpoint to probe
 // whether some other client's order id exists.
-func (s *OrderService) GetOrder(ctx context.Context, clientID, orderID uuid.UUID) (*domainorder.Order, error) {
+func (s *Service) GetOrder(ctx context.Context, clientID, orderID uuid.UUID) (*domainorder.Order, error) {
 	o, err := s.orders.Get(ctx, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("get order: %w", err)
@@ -53,7 +59,7 @@ func (s *OrderService) GetOrder(ctx context.Context, clientID, orderID uuid.UUID
 // scenarios, and the worst a lost update here causes is a duplicated
 // history row, not a stock or money error — unlike checkout, where the
 // analogous gap is exactly what PROMPT.md 9 asks to close with FOR UPDATE.
-func (s *OrderService) CancelOrder(ctx context.Context, clientID, orderID uuid.UUID) (*domainorder.Order, error) {
+func (s *Service) CancelOrder(ctx context.Context, clientID, orderID uuid.UUID) (*domainorder.Order, error) {
 	var result *domainorder.Order
 	err := s.txManager.WithinTx(ctx, func(ctx context.Context) error {
 		o, err := s.orders.Get(ctx, orderID)

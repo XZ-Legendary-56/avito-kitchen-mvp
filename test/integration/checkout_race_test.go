@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"sync"
 	"testing"
@@ -14,7 +15,7 @@ import (
 
 	pgadapter "avito-kitchen/internal/adapter/postgres"
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
 	orderusecase "avito-kitchen/internal/usecase/order"
 )

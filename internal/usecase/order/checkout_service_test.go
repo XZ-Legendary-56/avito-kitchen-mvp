@@ -1,6 +1,8 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/order"
 	"context"
 	"testing"
 	"time"
@@ -11,9 +13,8 @@ import (
 	"go.uber.org/mock/gomock"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase/order"
 )
 
 const testIdempotencyKey = "test-idempotency-key"
@@ -57,7 +58,7 @@ func TestPlaceOrder_EmptyCart(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -82,7 +83,7 @@ func TestPlaceOrder_VenueNotFound(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -111,7 +112,7 @@ func TestPlaceOrder_VenueNotAcceptingOrders(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -143,7 +144,7 @@ func TestPlaceOrder_Success(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -189,7 +190,7 @@ func TestPlaceOrder_PriceChanged_NoStockOrOrderSideEffects(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -227,7 +228,7 @@ func TestPlaceOrder_InsufficientStock(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -264,7 +265,7 @@ func TestPlaceOrder_MinOrderAmountNotReached_StockUntouched(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -302,7 +303,7 @@ func TestPlaceOrder_UnlimitedStockDoesNotBumpMenuVersion(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -342,7 +343,7 @@ func TestPlaceOrder_IdempotentReplay_ReturnsSameOrderWithoutTouchingCartOrStock(
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -374,7 +375,7 @@ func TestPlaceOrder_SameKeyDifferentBody_Conflict(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -406,7 +407,7 @@ func TestPlaceOrder_RescueOfferExpired_NoSideEffects(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
@@ -455,7 +456,7 @@ func TestPlaceOrder_RescuePartialCoverage_SplitsAndSucceeds(t *testing.T) {
 	venues := NewMockVenueLookup(ctrl)
 	menuItems := NewMockMenuItemLookup(ctrl)
 	rescueOffers := NewMockRescueOfferRepository(ctrl)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	idem := NewMockIdempotencyRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)

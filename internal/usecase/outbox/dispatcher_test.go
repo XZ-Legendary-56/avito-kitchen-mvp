@@ -1,6 +1,7 @@
 package outbox_test
 
 import (
+	"avito-kitchen/internal/usecase/outbox"
 	"context"
 	"errors"
 	"testing"
@@ -10,8 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-	"avito-kitchen/internal/usecase/outbox"
 )
 
 func TestDispatcher_ProcessOnce_MarksDeliveredEventSent(t *testing.T) {
@@ -108,6 +107,6 @@ func TestDispatcher_Run_StopsWhenContextCancelled(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Run did not return after its context was cancelled")
+		t.Fatal("Run did not return after its context was canceled")
 	}
 }

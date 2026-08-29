@@ -1,11 +1,10 @@
 package catalog
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"fmt"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // MenuItem is one position on a venue's menu (PROMPT.md 9: menu_items).

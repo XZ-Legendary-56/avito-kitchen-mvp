@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"avito-kitchen/internal/adapter/webhook"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -20,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	pgadapter "avito-kitchen/internal/adapter/postgres"
-	"avito-kitchen/internal/adapter/webhook"
+
 	domainorder "avito-kitchen/internal/domain/order"
 	orderusecase "avito-kitchen/internal/usecase/order"
 	outboxusecase "avito-kitchen/internal/usecase/outbox"
@@ -39,7 +40,7 @@ func setVenueWebhook(t *testing.T, pool *pgxpool.Pool, venueID uuid.UUID, url st
 	require.NoError(t, err)
 }
 
-func placeTestOrder(t *testing.T, pool *pgxpool.Pool, clientID, venueID, menuItemID uuid.UUID) *domainorder.Order {
+func placeTestOrder(t *testing.T, pool *pgxpool.Pool, clientID uuid.UUID) *domainorder.Order {
 	t.Helper()
 	svc := orderusecase.NewCheckoutService(
 		pgadapter.NewCartRepository(pool),
@@ -89,7 +90,7 @@ func TestOutboxDispatcher_DeliversSignedWebhookOnOrderCreated(t *testing.T) {
 	defer server.Close()
 	setVenueWebhook(t, pool, venueID, server.URL)
 
-	o := placeTestOrder(t, pool, clientID, venueID, menuItemID)
+	o := placeTestOrder(t, pool, clientID)
 
 	outboxRepo := pgadapter.NewOutboxRepository(pool)
 	publisher := webhook.NewPublisher(pgadapter.NewOrderRepository(pool), server.Client())
@@ -141,13 +142,13 @@ func TestOutboxDispatcher_RetriesOnFailureThenGivesUpAfterFiveAttempts(t *testin
 	clientID := uuid.New()
 	seedCartWithItem(t, pool, clientID, venueID, menuItemID, 1)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 	setVenueWebhook(t, pool, venueID, server.URL)
 
-	o := placeTestOrder(t, pool, clientID, venueID, menuItemID)
+	o := placeTestOrder(t, pool, clientID)
 
 	outboxRepo := pgadapter.NewOutboxRepository(pool)
 	publisher := webhook.NewPublisher(pgadapter.NewOrderRepository(pool), server.Client())

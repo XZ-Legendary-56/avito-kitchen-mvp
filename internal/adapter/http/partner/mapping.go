@@ -1,11 +1,12 @@
 package partner
 
 import (
+	"avito-kitchen/internal/generated/partnerapi"
 	"time"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/generated/partnerapi"
+
 	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 

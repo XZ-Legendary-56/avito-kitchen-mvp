@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -23,10 +24,10 @@ type panicResponse struct {
 func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
+			defer func(ctx context.Context) {
 				if rec := recover(); rec != nil {
-					requestID := RequestIDFromContext(r.Context())
-					logger.Error("panic recovered",
+					requestID := RequestIDFromContext(ctx)
+					logger.ErrorContext(ctx, "panic recovered",
 						"error", rec,
 						"request_id", requestID,
 						"path", r.URL.Path,
@@ -40,7 +41,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 						RequestID: requestID,
 					})
 				}
-			}()
+			}(r.Context())
 			next.ServeHTTP(w, r)
 		})
 	}

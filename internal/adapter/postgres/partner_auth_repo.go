@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"errors"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"avito-kitchen/internal/domain/errs"
 	partnerusecase "avito-kitchen/internal/usecase/partner"
 )
 

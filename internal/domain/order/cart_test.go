@@ -1,14 +1,13 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/domain/order"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/domain/order"
 )
 
 func TestCart_AddItem_NewLine(t *testing.T) {

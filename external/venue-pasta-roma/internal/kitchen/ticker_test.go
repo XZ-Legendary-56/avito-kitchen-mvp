@@ -43,7 +43,7 @@ func TestAdvanceDueOrders_TerminalStatusIsNeverPickedUp(t *testing.T) {
 	state := NewState()
 	orderID := uuid.New()
 	// Not due (zero NextAdvanceAt) and also not in statusSequence — belt and
-	// suspenders that a rejected/cancelled order is simply skipped.
+	// suspenders that a rejected/canceled order is simply skipped.
 	state.AddOrder(Order{ID: orderID, Status: "rejected"})
 
 	advanceDueOrders(context.Background(), platform.client(t), state, time.Minute, discardLogger())

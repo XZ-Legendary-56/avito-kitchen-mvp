@@ -9,6 +9,7 @@
 package integration
 
 import (
+	"avito-kitchen/migrations"
 	"context"
 	"database/sql"
 	"testing"
@@ -17,8 +18,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-
-	"avito-kitchen/migrations"
 )
 
 // newTestPool starts a throwaway Postgres container, brings it to the

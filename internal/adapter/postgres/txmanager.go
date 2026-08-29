@@ -7,6 +7,7 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/usecase"
 	"context"
 	"errors"
 	"fmt"
@@ -14,8 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"avito-kitchen/internal/usecase"
 )
 
 type ctxKey int
@@ -70,7 +69,7 @@ func (m *TxManager) WithinTx(ctx context.Context, fn func(ctx context.Context) e
 
 	if err := fn(context.WithValue(ctx, txKey, tx)); err != nil {
 		if rbErr := tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
-			return fmt.Errorf("%w (rollback also failed: %v)", err, rbErr)
+			return fmt.Errorf("%w (rollback also failed: %w)", err, rbErr)
 		}
 		return err
 	}

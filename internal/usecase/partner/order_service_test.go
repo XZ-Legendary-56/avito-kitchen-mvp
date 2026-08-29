@@ -1,6 +1,8 @@
 package partner_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/partner"
 	"context"
 	"testing"
 
@@ -9,9 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"avito-kitchen/internal/domain/errs"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase/partner"
 )
 
 func TestOrderService_GetOrder_BelongsToDifferentVenue(t *testing.T) {

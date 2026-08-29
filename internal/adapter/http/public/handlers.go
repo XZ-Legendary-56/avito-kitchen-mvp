@@ -1,10 +1,10 @@
 package public
 
 import (
-	"context"
-
 	"avito-kitchen/internal/domain/errs"
 	"avito-kitchen/internal/generated/publicapi"
+	"context"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 )
@@ -16,7 +16,7 @@ type Handlers struct {
 	Catalog  *catalogusecase.Service
 	Cart     *orderusecase.CartService
 	Checkout *orderusecase.CheckoutService
-	Orders   *orderusecase.OrderService
+	Orders   *orderusecase.Service
 }
 
 var _ publicapi.StrictServerInterface = (*Handlers)(nil)

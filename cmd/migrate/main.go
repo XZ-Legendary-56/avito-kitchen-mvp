@@ -5,6 +5,9 @@
 package main
 
 import (
+	"avito-kitchen/internal/config"
+	"avito-kitchen/internal/platform/logger"
+	"avito-kitchen/migrations"
 	"context"
 	"database/sql"
 	"fmt"
@@ -13,10 +16,6 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 	"github.com/pressly/goose/v3"
-
-	"avito-kitchen/internal/config"
-	"avito-kitchen/internal/platform/logger"
-	"avito-kitchen/migrations"
 )
 
 func main() {

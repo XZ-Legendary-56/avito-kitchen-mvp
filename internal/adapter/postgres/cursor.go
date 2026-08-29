@@ -1,13 +1,12 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"encoding/base64"
 	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // venueCursor is the keyset position for venue listing: (name, id), the

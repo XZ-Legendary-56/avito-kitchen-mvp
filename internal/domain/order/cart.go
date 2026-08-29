@@ -1,9 +1,9 @@
 package order
 
 import (
-	"github.com/google/uuid"
-
 	"avito-kitchen/internal/domain/errs"
+
+	"github.com/google/uuid"
 )
 
 // CartItem is one line in a cart. ID identifies the line itself (what the

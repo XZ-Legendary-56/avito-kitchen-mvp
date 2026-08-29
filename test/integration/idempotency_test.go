@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"sync"
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	pgadapter "avito-kitchen/internal/adapter/postgres"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
 	orderusecase "avito-kitchen/internal/usecase/order"
 )

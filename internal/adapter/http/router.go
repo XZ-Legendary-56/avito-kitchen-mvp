@@ -4,12 +4,6 @@
 package http
 
 import (
-	"log/slog"
-	"net/http"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"avito-kitchen/internal/adapter/http/httperr"
 	"avito-kitchen/internal/adapter/http/middleware"
 	"avito-kitchen/internal/adapter/http/partner"
@@ -18,6 +12,12 @@ import (
 	"avito-kitchen/internal/adapter/webhook"
 	"avito-kitchen/internal/generated/partnerapi"
 	"avito-kitchen/internal/generated/publicapi"
+	"log/slog"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 	outboxusecase "avito-kitchen/internal/usecase/outbox"

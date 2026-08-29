@@ -1,6 +1,8 @@
 package order_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/order"
 	"context"
 	"testing"
 
@@ -9,14 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"avito-kitchen/internal/domain/errs"
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase/order"
 )
 
 func TestGetOrder_Found(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
@@ -33,7 +33,7 @@ func TestGetOrder_Found(t *testing.T) {
 
 func TestGetOrder_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
@@ -51,7 +51,7 @@ func TestGetOrder_NotFound(t *testing.T) {
 
 func TestGetOrder_BelongsToDifferentClient(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 
@@ -70,7 +70,7 @@ func TestGetOrder_BelongsToDifferentClient(t *testing.T) {
 
 func TestCancelOrder_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
@@ -95,7 +95,7 @@ func TestCancelOrder_Success(t *testing.T) {
 
 func TestCancelOrder_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)
@@ -114,7 +114,7 @@ func TestCancelOrder_NotFound(t *testing.T) {
 
 func TestCancelOrder_RejectedOnceCooking(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	orders := NewMockOrderRepository(ctrl)
+	orders := NewMockRepository(ctrl)
 	outboxRepo := NewMockOutboxRepository(ctrl)
 	tx := NewMockTxManager(ctrl)
 	passthroughTx(tx)

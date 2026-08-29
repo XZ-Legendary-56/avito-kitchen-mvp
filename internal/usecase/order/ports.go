@@ -62,13 +62,13 @@ type VenueLookup interface {
 	BumpMenuVersion(ctx context.Context, id uuid.UUID) error
 }
 
-// OrderRepository persists and retrieves orders.
-type OrderRepository interface {
+// Repository persists and retrieves orders.
+type Repository interface {
 	// Create inserts the order, its items, and its History entries.
 	Create(ctx context.Context, o *domainorder.Order) error
 	// Get returns nil, nil if id does not exist. Used to answer GetOrder,
 	// to replay an order on an idempotent checkout retry, and as the read
-	// half of OrderService.CancelOrder.
+	// half of Service.CancelOrder.
 	Get(ctx context.Context, id uuid.UUID) (*domainorder.Order, error)
 	// AppendStatusChange persists one status transition already applied to
 	// an in-memory Order (via Order.TransitionTo/Cancel/Reject): it updates

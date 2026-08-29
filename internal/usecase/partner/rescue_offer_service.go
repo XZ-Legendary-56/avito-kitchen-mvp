@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"fmt"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
 )
 
 // NewRescueOfferRequest is POST /rescue-offers' input.
@@ -77,7 +77,7 @@ func (s *RescueOfferService) CreateOffer(ctx context.Context, venueID uuid.UUID,
 }
 
 // CancelOffer ends venueID's offerID early (PROMPT.md 5.3 item 9), by
-// setting cancelled_at rather than deleting the row — the row still needs
+// setting canceled_at rather than deleting the row — the row still needs
 // to exist for any order that already used it (order_items.rescue_offer_id
 // references it) and for the exclusion constraint to keep excluding its
 // own now-closed window from a genuinely overlapping new one.

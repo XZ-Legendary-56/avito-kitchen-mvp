@@ -1,11 +1,10 @@
 package order
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/domain/errs"
 )
 
 // CheckoutLine is one line of a checkout attempt: a cart line plus the

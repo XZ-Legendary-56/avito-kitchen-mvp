@@ -244,6 +244,6 @@ func TestHandleWebhook_OrderCancelled_ReleasesStock(t *testing.T) {
 	h.HandleWebhook(rec, cancelReq)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, 5, state.StockSnapshot()[0].StockQty, "cancelling an accepted order must give its stock back")
-	assert.Equal(t, "cancelled", state.GetOrder(orderID).Status)
+	assert.Equal(t, 5, state.StockSnapshot()[0].StockQty, "canceling an accepted order must give its stock back")
+	assert.Equal(t, "canceled", state.GetOrder(orderID).Status)
 }

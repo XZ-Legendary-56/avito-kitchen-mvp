@@ -85,7 +85,7 @@ func (d *Dispatcher) recordFailure(ctx context.Context, e Event, publishErr erro
 	return nil
 }
 
-// Run polls for due events every pollInterval until ctx is cancelled — the
+// Run polls for due events every pollInterval until ctx is canceled — the
 // background half of cmd/api described in that file's own doc comment.
 // Errors from ProcessOnce are logged, not returned: one bad poll (e.g. a
 // transient DB hiccup) must not stop the loop from trying again next tick.

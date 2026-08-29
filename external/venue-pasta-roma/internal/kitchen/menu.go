@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"venue-pasta-roma/internal/generated/partnerclient"
 )
 

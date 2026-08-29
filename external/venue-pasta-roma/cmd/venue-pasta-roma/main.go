@@ -19,7 +19,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
 	"venue-pasta-roma/internal/bootstrap"
 	"venue-pasta-roma/internal/config"
 	"venue-pasta-roma/internal/generated/partnerclient"

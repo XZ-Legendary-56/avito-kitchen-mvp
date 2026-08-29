@@ -3,6 +3,7 @@
 package webhook
 
 import (
+	"avito-kitchen/internal/usecase/outbox"
 	"bytes"
 	"context"
 	"crypto/hmac"
@@ -15,8 +16,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"avito-kitchen/internal/usecase/outbox"
 )
 
 // VenueWebhookLookup is this package's own port (PROMPT.md 6.2: an adapter
@@ -103,7 +102,7 @@ func (p *Publisher) Publish(ctx context.Context, e outbox.Event) error {
 		return fmt.Errorf("deliver webhook for order %s: %w", e.AggregateID, err)
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook receiver returned status %d for order %s", resp.StatusCode, e.AggregateID)

@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"fmt"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
 )
 
 // Service implements the catalog use-cases on top of the ports declared in

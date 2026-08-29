@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"errors"
 	"fmt"
@@ -10,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 	partnerusecase "avito-kitchen/internal/usecase/partner"
@@ -23,7 +24,8 @@ const menuItemColumns = "id, venue_id, category_id, name, description, price_min
 
 func scanMenuItem(row interface {
 	Scan(dest ...any) error
-}, mi *domaincatalog.MenuItem) error {
+}, mi *domaincatalog.MenuItem,
+) error {
 	return row.Scan(&mi.ID, &mi.VenueID, &mi.CategoryID, &mi.Name, &mi.Description, &mi.PriceMinor,
 		&mi.IsAvailable, &mi.StockQty, &mi.CookingTimeMinutes, &mi.Source, &mi.ExternalID)
 }

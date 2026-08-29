@@ -1,6 +1,8 @@
 package partner_test
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase/partner"
 	"context"
 	"testing"
 	"time"
@@ -11,8 +13,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/usecase/partner"
 )
 
 func TestRescueOfferService_CreateOffer_ValidatesDiscountBeforeHittingRepository(t *testing.T) {

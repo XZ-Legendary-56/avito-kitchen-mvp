@@ -1,0 +1,172 @@
+run:
+  timeout: 5m
+
+output:
+  formats:
+    - format: colored-line-number
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - gosec
+    - gocritic
+    - ineffassign
+    - unused
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    - sloglint
+    - errorlint
+    - nilerr
+    - contextcheck
+    - depguard
+    - misspell
+    - gofumpt
+    - goimports
+
+linters-settings:
+  misspell:
+    locale: US
+
+  gosec:
+    excludes:
+      - G104 # unchecked errors: errcheck already owns this
+
+  depguard:
+    rules:
+      # PROMPT.md 6.2: domain imports nothing but stdlib and uuid.
+      domain:
+        files:
+          - "internal/domain/**/*.go"
+        allow:
+          - $gostd
+          - github.com/google/uuid
+        deny:
+          - pkg: "avito-kitchen/internal/usecase"
+            desc: "domain must not depend on usecase (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter"
+            desc: "domain must not depend on adapter (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/generated"
+            desc: "domain must not depend on generated code (PROMPT.md 6.2)"
+
+      # PROMPT.md 6.2: usecase depends on domain and its own ports, never on
+      # adapters or generated (wire) code.
+      usecase-no-adapter:
+        files:
+          - "internal/usecase/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/adapter"
+            desc: "usecase must not depend on adapter (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/generated"
+            desc: "usecase must not depend on generated code (PROMPT.md 6.2)"
+
+      # PROMPT.md 6.2: one usecase module never imports another usecase
+      # module's package directly - each declares its own ports even when
+      # another module's port has an identical shape.
+      usecase-catalog-isolation:
+        files:
+          - "internal/usecase/catalog/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/usecase/order"
+            desc: "usecase/catalog must not depend on usecase/order (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/partner"
+            desc: "usecase/catalog must not depend on usecase/partner (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/outbox"
+            desc: "usecase/catalog must not depend on usecase/outbox (PROMPT.md 6.2)"
+      usecase-order-isolation:
+        files:
+          - "internal/usecase/order/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/usecase/catalog"
+            desc: "usecase/order must not depend on usecase/catalog (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/partner"
+            desc: "usecase/order must not depend on usecase/partner (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/outbox"
+            desc: "usecase/order must not depend on usecase/outbox (PROMPT.md 6.2)"
+      usecase-partner-isolation:
+        files:
+          - "internal/usecase/partner/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/usecase/catalog"
+            desc: "usecase/partner must not depend on usecase/catalog (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/order"
+            desc: "usecase/partner must not depend on usecase/order (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/outbox"
+            desc: "usecase/partner must not depend on usecase/outbox (PROMPT.md 6.2)"
+      usecase-outbox-isolation:
+        files:
+          - "internal/usecase/outbox/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/usecase/catalog"
+            desc: "usecase/outbox must not depend on usecase/catalog (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/order"
+            desc: "usecase/outbox must not depend on usecase/order (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/usecase/partner"
+            desc: "usecase/outbox must not depend on usecase/partner (PROMPT.md 6.2)"
+
+      # PROMPT.md 6.2: adapters implement ports, they don't know about each
+      # other. internal/adapter/http itself (router.go) is the composition
+      # root that wires every adapter together, so it is deliberately left
+      # unrestricted - only the leaf adapters below are isolated from one
+      # another. http/httperr and http/middleware are shared plumbing
+      # within the http adapter family, not separate adapters, so they stay
+      # unrestricted too.
+      adapter-postgres-isolation:
+        files:
+          - "internal/adapter/postgres/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/adapter/webhook"
+            desc: "adapter/postgres must not depend on adapter/webhook (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/http"
+            desc: "adapter/postgres must not depend on adapter/http (PROMPT.md 6.2)"
+      adapter-webhook-isolation:
+        files:
+          - "internal/adapter/webhook/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/adapter/postgres"
+            desc: "adapter/webhook must not depend on adapter/postgres (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/http"
+            desc: "adapter/webhook must not depend on adapter/http (PROMPT.md 6.2)"
+      adapter-http-public-isolation:
+        files:
+          - "internal/adapter/http/public/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/adapter/postgres"
+            desc: "adapter/http/public must not depend on adapter/postgres (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/webhook"
+            desc: "adapter/http/public must not depend on adapter/webhook (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/http/partner"
+            desc: "adapter/http/public must not depend on adapter/http/partner (PROMPT.md 6.2)"
+      adapter-http-partner-isolation:
+        files:
+          - "internal/adapter/http/partner/**/*.go"
+        deny:
+          - pkg: "avito-kitchen/internal/adapter/postgres"
+            desc: "adapter/http/partner must not depend on adapter/postgres (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/webhook"
+            desc: "adapter/http/partner must not depend on adapter/webhook (PROMPT.md 6.2)"
+          - pkg: "avito-kitchen/internal/adapter/http/public"
+            desc: "adapter/http/partner must not depend on adapter/http/public (PROMPT.md 6.2)"
+
+      # PROMPT.md 8.1: the platform's own code must never reach into the
+      # separate venue-pasta-roma module - Go's own internal/ visibility
+      # rule already makes this impossible across module boundaries, this
+      # rule just makes the intent explicit and checked, not tribal
+      # knowledge.
+      no-venue-pasta-roma:
+        files:
+          - "**/*.go"
+        deny:
+          - pkg: "venue-pasta-roma"
+            desc: "the platform must not depend on the separate venue-pasta-roma module (PROMPT.md 8.1)"
+
+issues:
+  exclude-dirs:
+    - internal/generated
+  max-issues-per-linter: 0
+  max-same-issues: 0

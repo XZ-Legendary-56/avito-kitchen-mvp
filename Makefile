@@ -1,4 +1,4 @@
-.PHONY: up down logs build test test-integration lint migrate-up migrate-down migrate-status seed generate
+.PHONY: up down logs build test test-integration lint check migrate-up migrate-down migrate-status seed generate
 
 # Host-side defaults for talking to the Compose postgres from outside Docker
 # (make migrate-up, make seed). 5434 because 5432/5433 are commonly already
@@ -64,12 +64,22 @@ generate:
 	go tool mockgen -source=internal/usecase/outbox/ports.go -destination=internal/usecase/outbox/mock_test.go -package=outbox_test
 	go tool mockgen -source=internal/adapter/webhook/publisher.go -destination=internal/adapter/webhook/mock_test.go -package=webhook_test
 
-# Interim lint target for this stage: gofmt + go vet. Stage 12 replaces this
-# with golangci-lint once .golangci.yml (section 10.1 of PROMPT.md) is added.
+# Full linter set from PROMPT.md 10.1, run separately per module since each
+# has its own .golangci.yml (the two are independent Go modules joined only
+# by go.work, and golangci-lint lints one module tree at a time).
 lint:
-	@fmtout="$$(gofmt -l .)"; \
-	if [ -n "$$fmtout" ]; then \
-		echo "gofmt needs to be run on:"; echo "$$fmtout"; exit 1; \
+	golangci-lint run --build-tags=integration ./...
+	cd external/venue-pasta-roma && golangci-lint run --build-tags=integration ./...
+
+# PROMPT.md 11: lint + test + a check that generated code (oapi-codegen,
+# mockgen) is not stale. Regenerates first so a forgotten `make generate`
+# after editing an .yaml spec or a ports.go file fails loudly here instead
+# of silently shipping outdated generated code.
+check: generate
+	@diffout="$$(git status --porcelain)"; \
+	if [ -n "$$diffout" ]; then \
+		echo "generated code is stale — run 'make generate' and commit the result:"; \
+		echo "$$diffout"; exit 1; \
 	fi
-	go vet ./...
-	go vet venue-pasta-roma/...
+	$(MAKE) lint
+	$(MAKE) test

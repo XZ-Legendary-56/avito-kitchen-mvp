@@ -1,6 +1,7 @@
 package partner_test
 
 import (
+	"avito-kitchen/internal/usecase/partner"
 	"context"
 	"errors"
 	"testing"
@@ -11,7 +12,6 @@ import (
 	"go.uber.org/mock/gomock"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/usecase/partner"
 )
 
 func TestMenuService_GetMenu(t *testing.T) {

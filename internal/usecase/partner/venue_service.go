@@ -1,6 +1,8 @@
 package partner
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -9,8 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
-	"avito-kitchen/internal/usecase"
 )
 
 // VenueService backs GET/PATCH /venue (PROMPT.md 5.3 items 4-5).

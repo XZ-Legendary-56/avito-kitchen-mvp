@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"avito-kitchen/internal/domain/errs"
 	"context"
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
 	orderusecase "avito-kitchen/internal/usecase/order"
 	partnerusecase "avito-kitchen/internal/usecase/partner"

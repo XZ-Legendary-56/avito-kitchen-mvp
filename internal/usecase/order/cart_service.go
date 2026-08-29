@@ -1,6 +1,8 @@
 package order
 
 import (
+	"avito-kitchen/internal/domain/errs"
+	"avito-kitchen/internal/usecase"
 	"context"
 	"fmt"
 	"time"
@@ -8,9 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
-	"avito-kitchen/internal/domain/errs"
+
 	domainorder "avito-kitchen/internal/domain/order"
-	"avito-kitchen/internal/usecase"
 )
 
 // CartService implements the cart use-cases (PROMPT.md 5.1 item 3).

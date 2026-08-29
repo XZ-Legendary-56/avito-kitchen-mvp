@@ -158,32 +158,32 @@ func (mr *MockVenueLookupMockRecorder) Get(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVenueLookup)(nil).Get), ctx, id)
 }
 
-// MockOrderRepository is a mock of OrderRepository interface.
-type MockOrderRepository struct {
+// MockRepository is a mock of Repository interface.
+type MockRepository struct {
 	ctrl     *gomock.Controller
-	recorder *MockOrderRepositoryMockRecorder
+	recorder *MockRepositoryMockRecorder
 	isgomock struct{}
 }
 
-// MockOrderRepositoryMockRecorder is the mock recorder for MockOrderRepository.
-type MockOrderRepositoryMockRecorder struct {
-	mock *MockOrderRepository
+// MockRepositoryMockRecorder is the mock recorder for MockRepository.
+type MockRepositoryMockRecorder struct {
+	mock *MockRepository
 }
 
-// NewMockOrderRepository creates a new mock instance.
-func NewMockOrderRepository(ctrl *gomock.Controller) *MockOrderRepository {
-	mock := &MockOrderRepository{ctrl: ctrl}
-	mock.recorder = &MockOrderRepositoryMockRecorder{mock}
+// NewMockRepository creates a new mock instance.
+func NewMockRepository(ctrl *gomock.Controller) *MockRepository {
+	mock := &MockRepository{ctrl: ctrl}
+	mock.recorder = &MockRepositoryMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOrderRepository) EXPECT() *MockOrderRepositoryMockRecorder {
+func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
 // AppendStatusChange mocks base method.
-func (m *MockOrderRepository) AppendStatusChange(ctx context.Context, orderID uuid.UUID, change order.StatusChange) error {
+func (m *MockRepository) AppendStatusChange(ctx context.Context, orderID uuid.UUID, change order.StatusChange) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AppendStatusChange", ctx, orderID, change)
 	ret0, _ := ret[0].(error)
@@ -191,13 +191,13 @@ func (m *MockOrderRepository) AppendStatusChange(ctx context.Context, orderID uu
 }
 
 // AppendStatusChange indicates an expected call of AppendStatusChange.
-func (mr *MockOrderRepositoryMockRecorder) AppendStatusChange(ctx, orderID, change any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) AppendStatusChange(ctx, orderID, change any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendStatusChange", reflect.TypeOf((*MockOrderRepository)(nil).AppendStatusChange), ctx, orderID, change)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendStatusChange", reflect.TypeOf((*MockRepository)(nil).AppendStatusChange), ctx, orderID, change)
 }
 
 // Create mocks base method.
-func (m *MockOrderRepository) Create(ctx context.Context, o *order.Order) error {
+func (m *MockRepository) Create(ctx context.Context, o *order.Order) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", ctx, o)
 	ret0, _ := ret[0].(error)
@@ -205,13 +205,13 @@ func (m *MockOrderRepository) Create(ctx context.Context, o *order.Order) error 
 }
 
 // Create indicates an expected call of Create.
-func (mr *MockOrderRepositoryMockRecorder) Create(ctx, o any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Create(ctx, o any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOrderRepository)(nil).Create), ctx, o)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockRepository)(nil).Create), ctx, o)
 }
 
 // Get mocks base method.
-func (m *MockOrderRepository) Get(ctx context.Context, id uuid.UUID) (*order.Order, error) {
+func (m *MockRepository) Get(ctx context.Context, id uuid.UUID) (*order.Order, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, id)
 	ret0, _ := ret[0].(*order.Order)
@@ -220,9 +220,9 @@ func (m *MockOrderRepository) Get(ctx context.Context, id uuid.UUID) (*order.Ord
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockOrderRepositoryMockRecorder) Get(ctx, id any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) Get(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockOrderRepository)(nil).Get), ctx, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRepository)(nil).Get), ctx, id)
 }
 
 // MockIdempotencyRepository is a mock of IdempotencyRepository interface.
