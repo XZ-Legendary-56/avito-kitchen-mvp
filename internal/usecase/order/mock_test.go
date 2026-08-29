@@ -43,6 +43,21 @@ func (m *MockMenuItemLookup) EXPECT() *MockMenuItemLookupMockRecorder {
 	return m.recorder
 }
 
+// DecrementStock mocks base method.
+func (m *MockMenuItemLookup) DecrementStock(ctx context.Context, id uuid.UUID, quantity int) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecrementStock", ctx, id, quantity)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DecrementStock indicates an expected call of DecrementStock.
+func (mr *MockMenuItemLookupMockRecorder) DecrementStock(ctx, id, quantity any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecrementStock", reflect.TypeOf((*MockMenuItemLookup)(nil).DecrementStock), ctx, id, quantity)
+}
+
 // Get mocks base method.
 func (m *MockMenuItemLookup) Get(ctx context.Context, id uuid.UUID) (*catalog.MenuItem, error) {
 	m.ctrl.T.Helper()
@@ -71,6 +86,112 @@ func (m *MockMenuItemLookup) GetMany(ctx context.Context, ids []uuid.UUID) (map[
 func (mr *MockMenuItemLookupMockRecorder) GetMany(ctx, ids any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMany", reflect.TypeOf((*MockMenuItemLookup)(nil).GetMany), ctx, ids)
+}
+
+// LockForCheckout mocks base method.
+func (m *MockMenuItemLookup) LockForCheckout(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]catalog.MenuItem, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockForCheckout", ctx, ids)
+	ret0, _ := ret[0].(map[uuid.UUID]catalog.MenuItem)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockForCheckout indicates an expected call of LockForCheckout.
+func (mr *MockMenuItemLookupMockRecorder) LockForCheckout(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockForCheckout", reflect.TypeOf((*MockMenuItemLookup)(nil).LockForCheckout), ctx, ids)
+}
+
+// MockVenueLookup is a mock of VenueLookup interface.
+type MockVenueLookup struct {
+	ctrl     *gomock.Controller
+	recorder *MockVenueLookupMockRecorder
+	isgomock struct{}
+}
+
+// MockVenueLookupMockRecorder is the mock recorder for MockVenueLookup.
+type MockVenueLookupMockRecorder struct {
+	mock *MockVenueLookup
+}
+
+// NewMockVenueLookup creates a new mock instance.
+func NewMockVenueLookup(ctrl *gomock.Controller) *MockVenueLookup {
+	mock := &MockVenueLookup{ctrl: ctrl}
+	mock.recorder = &MockVenueLookupMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockVenueLookup) EXPECT() *MockVenueLookupMockRecorder {
+	return m.recorder
+}
+
+// BumpMenuVersion mocks base method.
+func (m *MockVenueLookup) BumpMenuVersion(ctx context.Context, id uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BumpMenuVersion", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BumpMenuVersion indicates an expected call of BumpMenuVersion.
+func (mr *MockVenueLookupMockRecorder) BumpMenuVersion(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BumpMenuVersion", reflect.TypeOf((*MockVenueLookup)(nil).BumpMenuVersion), ctx, id)
+}
+
+// Get mocks base method.
+func (m *MockVenueLookup) Get(ctx context.Context, id uuid.UUID) (*catalog.Venue, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, id)
+	ret0, _ := ret[0].(*catalog.Venue)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockVenueLookupMockRecorder) Get(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockVenueLookup)(nil).Get), ctx, id)
+}
+
+// MockOrderRepository is a mock of OrderRepository interface.
+type MockOrderRepository struct {
+	ctrl     *gomock.Controller
+	recorder *MockOrderRepositoryMockRecorder
+	isgomock struct{}
+}
+
+// MockOrderRepositoryMockRecorder is the mock recorder for MockOrderRepository.
+type MockOrderRepositoryMockRecorder struct {
+	mock *MockOrderRepository
+}
+
+// NewMockOrderRepository creates a new mock instance.
+func NewMockOrderRepository(ctrl *gomock.Controller) *MockOrderRepository {
+	mock := &MockOrderRepository{ctrl: ctrl}
+	mock.recorder = &MockOrderRepositoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockOrderRepository) EXPECT() *MockOrderRepositoryMockRecorder {
+	return m.recorder
+}
+
+// Create mocks base method.
+func (m *MockOrderRepository) Create(ctx context.Context, o *order.Order) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", ctx, o)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockOrderRepositoryMockRecorder) Create(ctx, o any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOrderRepository)(nil).Create), ctx, o)
 }
 
 // MockCartRepository is a mock of CartRepository interface.

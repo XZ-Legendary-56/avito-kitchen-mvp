@@ -13,13 +13,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	domaincatalog "avito-kitchen/internal/domain/catalog"
+	"avito-kitchen/internal/domain/errs"
 	catalogusecase "avito-kitchen/internal/usecase/catalog"
+	orderusecase "avito-kitchen/internal/usecase/order"
 )
 
 const defaultVenuePageLimit = 20
 
-// VenueRepository implements catalogusecase.VenueRepository on venues and
-// venue_schedules.
+// VenueRepository implements catalogusecase.VenueRepository and
+// orderusecase.VenueLookup on venues and venue_schedules — the same "one
+// adapter, several usecase-declared ports" pattern MenuRepository uses,
+// since both ports are ultimately reads (and one write) of the venues
+// table.
 type VenueRepository struct {
 	pool *pgxpool.Pool
 }
@@ -28,7 +33,10 @@ func NewVenueRepository(pool *pgxpool.Pool) *VenueRepository {
 	return &VenueRepository{pool: pool}
 }
 
-var _ catalogusecase.VenueRepository = (*VenueRepository)(nil)
+var (
+	_ catalogusecase.VenueRepository = (*VenueRepository)(nil)
+	_ orderusecase.VenueLookup       = (*VenueRepository)(nil)
+)
 
 // List returns a page of venues ordered by (name, id) — a stable tiebreak
 // so keyset pagination never skips or repeats a row when two venues share
@@ -159,6 +167,27 @@ func (r *VenueRepository) GetByID(ctx context.Context, id uuid.UUID) (*domaincat
 		return nil, err
 	}
 	return &venues[0], nil
+}
+
+// Get is GetByID under the name orderusecase.VenueLookup declares —
+// checkout needs exactly the same venue-plus-schedule read catalog's own
+// GetVenue use-case does, so there is nothing to implement separately.
+func (r *VenueRepository) Get(ctx context.Context, id uuid.UUID) (*domaincatalog.Venue, error) {
+	return r.GetByID(ctx, id)
+}
+
+// BumpMenuVersion increases venues.menu_version by one. Called by checkout
+// whenever it actually changes stock (PROMPT.md 6.6).
+func (r *VenueRepository) BumpMenuVersion(ctx context.Context, id uuid.UUID) error {
+	q := QuerierFromContext(ctx, r.pool)
+	tag, err := q.Exec(ctx, `UPDATE venues SET menu_version = menu_version + 1, updated_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("bump menu version: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errs.New(errs.CodeNotFound, "venue not found")
+	}
+	return nil
 }
 
 // attachSchedules loads every schedule row for venues in a single query

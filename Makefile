@@ -1,4 +1,4 @@
-.PHONY: up down logs build test lint migrate-up migrate-down migrate-status seed generate
+.PHONY: up down logs build test test-integration lint migrate-up migrate-down migrate-status seed generate
 
 # Host-side defaults for talking to the Compose postgres from outside Docker
 # (make migrate-up, make seed). 5434 because 5432/5433 are commonly already
@@ -26,6 +26,12 @@ build:
 
 test:
 	go test ./...
+
+# Needs Docker: spins up a real Postgres per test via testcontainers-go.
+# Gated behind the "integration" build tag so plain `make test` (and plain
+# `go test ./...`) never does this implicitly.
+test-integration:
+	go test -tags=integration ./test/integration/... -v
 
 migrate-up:
 	$(db_env) go run ./cmd/migrate up
