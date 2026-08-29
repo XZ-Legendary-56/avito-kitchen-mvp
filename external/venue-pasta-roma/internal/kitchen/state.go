@@ -11,6 +11,15 @@ import (
 	"github.com/google/uuid"
 )
 
+// maxSeenEvents bounds how many delivered webhook event ids this service
+// remembers for dedup (PROMPT.md 7.4). A plain unbounded map would grow for
+// the entire life of the process; a fixed-size FIFO is the simplest bound
+// that still makes a real redelivery (which arrives within the platform's
+// own retry window — seconds to tens of minutes, PROMPT.md 7.4) vanishingly
+// unlikely to have already been evicted by then, without needing a wall
+// clock or TTL bookkeeping.
+const maxSeenEvents = 10000
+
 // MenuItem is this venue's own view of one dish. ExternalID is how this
 // service names it (chosen before the platform ever heard of it);
 // PlatformID is what the platform calls the same dish, learned from the
@@ -31,10 +40,24 @@ type OrderItem struct {
 	Quantity           int
 }
 
+// PendingAction names an outgoing call to the platform that this service
+// has decided to make (accept or reject an order) but has not yet
+// confirmed succeeded — see Order.Pending's own doc comment.
+type PendingAction string
+
+const (
+	PendingNone   PendingAction = ""
+	PendingAccept PendingAction = "accept"
+	PendingReject PendingAction = "reject"
+)
+
 // Order is this emulator's own record of one order, driven by whatever the
 // order.created webhook said plus this service's own accept/reject
-// decision. Status mirrors the platform's OrderStatus values so GET
-// /kitchen/orders reads naturally next to the platform's own order view.
+// decision. Status mirrors the platform's OrderStatus values, plus two
+// local-only values ("pending_accept"/"pending_reject") that never reach
+// the platform — they exist purely so GET /kitchen/orders can show staff
+// an order this service has decided on but not yet managed to tell the
+// platform about.
 type Order struct {
 	ID              uuid.UUID
 	Status          string
@@ -42,9 +65,25 @@ type Order struct {
 	DeliveryAddress string
 	Accepted        bool
 	RejectionReason string
+	ETAMinutes      int
+	ExternalOrderID string
+
 	// NextAdvanceAt is when the status ticker should move this order to its
 	// next status. Zero once the order reaches a terminal status.
 	NextAdvanceAt time.Time
+
+	// Pending is non-empty when the platform call that should have
+	// accompanied this order's current decision (AcceptOrder/RejectOrder)
+	// failed — a transient network or platform error, not a business
+	// rejection — and still needs to be retried. NextRetryAt is when to try
+	// again. Retries continue indefinitely at the same cadence as the
+	// status ticker; there is no give-up threshold, unlike the platform's
+	// own outbox (PROMPT.md 7.4's 5-attempt limit exists because a webhook
+	// receiver might not exist at all). Here the receiver is the platform —
+	// this whole assignment's own subject — so it is never expected to stay
+	// down forever the way an arbitrary third party might.
+	Pending     PendingAction
+	NextRetryAt time.Time
 }
 
 // State is this service's entire memory — no database, per PROMPT.md 8.1:
@@ -59,20 +98,28 @@ type State struct {
 
 	orders map[uuid.UUID]*Order
 
-	// seenEvents dedupes inbound webhooks by X-Event-Id (PROMPT.md 7.4: the
-	// receiver, not the sender, is responsible for this). It only ever
-	// grows for the life of the process — there is no expiry — which is
-	// fine for a demo service that lives for one docker-compose run, not a
-	// design this project would keep for something long-lived.
+	// seenEvents/seenOrder together dedupe inbound webhooks by X-Event-Id
+	// (PROMPT.md 7.4: the receiver, not the sender, is responsible for
+	// this), bounded to maxSeenEvents entries, oldest evicted first — see
+	// that constant's own doc comment for why a hard cap is enough here.
 	seenEvents map[uuid.UUID]struct{}
+	seenOrder  []uuid.UUID
+	maxSeen    int
 }
 
 func NewState() *State {
+	return newStateWithCap(maxSeenEvents)
+}
+
+// newStateWithCap lets tests exercise eviction without needing to insert
+// maxSeenEvents real entries first.
+func newStateWithCap(maxSeen int) *State {
 	return &State{
 		menuByPlatformID: make(map[uuid.UUID]*MenuItem),
 		menuByExternalID: make(map[string]uuid.UUID),
 		orders:           make(map[uuid.UUID]*Order),
 		seenEvents:       make(map[uuid.UUID]struct{}),
+		maxSeen:          maxSeen,
 	}
 }
 
@@ -156,7 +203,8 @@ func (s *State) StockSnapshot() []MenuItem {
 // MarkEventSeen reports whether eventID is new (true) or a duplicate
 // delivery this service has already processed (false) — PROMPT.md 7.4's
 // at-least-once contract means the platform may resend the same event, and
-// this is the dedup half of that deal.
+// this is the dedup half of that deal. Once more than maxSeen ids are
+// tracked, the oldest is forgotten (see maxSeenEvents's own doc comment).
 func (s *State) MarkEventSeen(eventID uuid.UUID) (isNew bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -165,10 +213,16 @@ func (s *State) MarkEventSeen(eventID uuid.UUID) (isNew bool) {
 		return false
 	}
 	s.seenEvents[eventID] = struct{}{}
+	s.seenOrder = append(s.seenOrder, eventID)
+	if len(s.seenOrder) > s.maxSeen {
+		oldest := s.seenOrder[0]
+		s.seenOrder = s.seenOrder[1:]
+		delete(s.seenEvents, oldest)
+	}
 	return true
 }
 
-// AddOrder records a newly accepted or rejected order.
+// AddOrder records a newly accepted, rejected, or pending order.
 func (s *State) AddOrder(o Order) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -199,6 +253,24 @@ func (s *State) ListOrders() []Order {
 	return out
 }
 
+// ActiveOrderCount is how many tracked orders are not yet in a terminal
+// state — this service's own stand-in for "how busy is the kitchen right
+// now", used to make ETA estimates grow when more orders are in flight
+// (see ticker.go's estimateETAMinutes).
+func (s *State) ActiveOrderCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, o := range s.orders {
+		switch o.Status {
+		case "delivered", "rejected", "cancelled":
+		default:
+			count++
+		}
+	}
+	return count
+}
+
 // DueOrders returns every tracked order whose NextAdvanceAt has arrived —
 // the status ticker's own "what's due" query, same shape as the platform's
 // outbox Dispatcher.FetchDue for the same reason: check once, act on a
@@ -227,9 +299,48 @@ func (s *State) AdvanceOrder(orderID uuid.UUID, status string, nextAdvanceAt tim
 	}
 }
 
+// DuePendingActions returns every tracked order with a pending
+// accept/reject call whose NextRetryAt has arrived.
+func (s *State) DuePendingActions(now time.Time) []Order {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var due []Order
+	for _, o := range s.orders {
+		if o.Pending != PendingNone && !o.NextRetryAt.After(now) {
+			due = append(due, *o)
+		}
+	}
+	return due
+}
+
+// ResolvePending clears a tracked order's Pending flag and moves it to
+// status, once a retried accept/reject call has finally succeeded (or the
+// platform reports the order already in that state — see ticker.go's
+// retryPendingActions for why a 409 counts as resolved too).
+func (s *State) ResolvePending(orderID uuid.UUID, status string, nextAdvanceAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o, ok := s.orders[orderID]; ok {
+		o.Status = status
+		o.Pending = PendingNone
+		o.NextAdvanceAt = nextAdvanceAt
+		o.NextRetryAt = time.Time{}
+	}
+}
+
+// ScheduleRetry reschedules a still-failing pending action for another
+// attempt later, leaving Pending and Status untouched.
+func (s *State) ScheduleRetry(orderID uuid.UUID, nextRetryAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o, ok := s.orders[orderID]; ok {
+		o.NextRetryAt = nextRetryAt
+	}
+}
+
 // CancelOrder marks a tracked order cancelled and stops any further
-// automatic advance. Returns the order's items (for stock release) and
-// whether it was tracked at all.
+// automatic advance or pending-action retry. Returns the order's items
+// (for stock release) and whether it was tracked at all.
 func (s *State) CancelOrder(orderID uuid.UUID) (items []OrderItem, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -239,5 +350,7 @@ func (s *State) CancelOrder(orderID uuid.UUID) (items []OrderItem, ok bool) {
 	}
 	o.Status = "cancelled"
 	o.NextAdvanceAt = time.Time{}
+	o.Pending = PendingNone
+	o.NextRetryAt = time.Time{}
 	return o.Items, true
 }

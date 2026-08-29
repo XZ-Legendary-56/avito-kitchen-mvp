@@ -45,11 +45,37 @@ type orderCancelledPayload struct {
 	OrderID uuid.UUID `json:"order_id"`
 }
 
-// acceptETAMinutes is the fixed lead time this emulator quotes on every
-// order it accepts. A real venue would compute this from what's actually
-// on the line; this service's whole job is to be a stand-in for that
-// system, not to reimplement it.
-const acceptETAMinutes = 20
+// estimateETAMinutes is this emulator's own stand-in for a kitchen actually
+// timing itself: a base prep time, plus a little more per dish on the
+// order (more plates, more time), plus a little more for every other order
+// already in flight (a busier kitchen quotes longer). The exact
+// coefficients are this service's own choice — PROMPT.md 8.2 asks for "an
+// estimate", not a specific formula — clamped to a plausible 10-60 minute
+// range so neither a one-item order nor a slammed kitchen produces a
+// nonsense number.
+func estimateETAMinutes(items []OrderItem, activeOrders int) int {
+	const (
+		baseMinutes        = 15
+		perItemMinutes     = 3
+		perActiveOrderLoad = 2
+		minETA             = 10
+		maxETA             = 60
+	)
+
+	totalQuantity := 0
+	for _, line := range items {
+		totalQuantity += line.Quantity
+	}
+
+	eta := baseMinutes + perItemMinutes*totalQuantity + perActiveOrderLoad*activeOrders
+	if eta < minETA {
+		return minETA
+	}
+	if eta > maxETA {
+		return maxETA
+	}
+	return eta
+}
 
 // verifySignature reports whether signatureHeader is the correct
 // HMAC-SHA256 hex digest of body under secret — pulled out as its own pure
@@ -133,44 +159,70 @@ func (h *Handler) handleOrderCreated(ctx context.Context, raw json.RawMessage) {
 	h.rejectOrder(ctx, p.OrderID, "insufficient stock in the venue's own system")
 }
 
+// acceptOrder reserves nothing new (CheckAndReserve already did, in the
+// caller) — it only tries to tell the platform. If that call fails for any
+// reason other than the platform already knowing about it (a 409, treated
+// as "some earlier attempt actually landed"), the order is tracked as
+// pending_accept rather than lost: stock stays reserved, and
+// ticker.go's retryPendingActions will keep trying until it succeeds.
 func (h *Handler) acceptOrder(ctx context.Context, orderID uuid.UUID, items []OrderItem, deliveryAddress string) {
+	eta := estimateETAMinutes(items, h.state.ActiveOrderCount())
 	externalOrderID := fmt.Sprintf("PR-%s", orderID.String()[:8])
+
 	resp, err := h.client.AcceptOrderWithResponse(ctx, orderID, partnerclient.AcceptOrderJSONRequestBody{
-		EtaMinutes:      acceptETAMinutes,
+		EtaMinutes:      eta,
 		ExternalOrderId: &externalOrderID,
 	})
-	if err != nil || resp.JSON200 == nil {
-		status := 0
-		if resp != nil {
-			status = resp.StatusCode()
-		}
-		h.logger.Error("accept order failed", "order_id", orderID, "error", err, "status", status)
-		h.state.ReleaseStock(items)
-		return
-	}
-
-	h.state.AddOrder(Order{
+	order := Order{
 		ID:              orderID,
-		Status:          "confirmed",
 		Items:           items,
 		DeliveryAddress: deliveryAddress,
 		Accepted:        true,
-		NextAdvanceAt:   time.Now().Add(h.cookStep),
-	})
-	h.logger.Info("order accepted", "order_id", orderID, "external_order_id", externalOrderID)
+		ETAMinutes:      eta,
+		ExternalOrderID: externalOrderID,
+	}
+
+	if err == nil && (resp.JSON200 != nil || resp.JSON409 != nil) {
+		order.Status = "confirmed"
+		order.NextAdvanceAt = time.Now().Add(h.cookStep)
+		h.state.AddOrder(order)
+		h.logger.Info("order accepted", "order_id", orderID, "external_order_id", externalOrderID)
+		return
+	}
+
+	status := 0
+	if resp != nil {
+		status = resp.StatusCode()
+	}
+	h.logger.Error("accept order failed, will retry", "order_id", orderID, "error", err, "status", status)
+	order.Status = "pending_accept"
+	order.Pending = PendingAccept
+	order.NextRetryAt = time.Now().Add(h.cookStep)
+	h.state.AddOrder(order)
 }
 
+// rejectOrder mirrors acceptOrder's own retry logic, but never touches
+// stock — CheckAndReserve never reserved any for a rejected order.
 func (h *Handler) rejectOrder(ctx context.Context, orderID uuid.UUID, reason string) {
 	resp, err := h.client.RejectOrderWithResponse(ctx, orderID, partnerclient.RejectOrderJSONRequestBody{Reason: reason})
-	if err != nil || resp.JSON200 == nil {
-		status := 0
-		if resp != nil {
-			status = resp.StatusCode()
-		}
-		h.logger.Error("reject order failed", "order_id", orderID, "error", err, "status", status)
+	order := Order{ID: orderID, Accepted: false, RejectionReason: reason}
+
+	if err == nil && (resp.JSON200 != nil || resp.JSON409 != nil) {
+		order.Status = "rejected"
+		h.state.AddOrder(order)
+		h.logger.Info("order rejected", "order_id", orderID, "reason", reason)
+		return
 	}
-	h.state.AddOrder(Order{ID: orderID, Status: "rejected", Accepted: false, RejectionReason: reason})
-	h.logger.Info("order rejected", "order_id", orderID, "reason", reason)
+
+	status := 0
+	if resp != nil {
+		status = resp.StatusCode()
+	}
+	h.logger.Error("reject order failed, will retry", "order_id", orderID, "error", err, "status", status)
+	order.Status = "pending_reject"
+	order.Pending = PendingReject
+	order.NextRetryAt = time.Now().Add(h.cookStep)
+	h.state.AddOrder(order)
 }
 
 func (h *Handler) handleOrderCancelled(raw json.RawMessage) {

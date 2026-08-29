@@ -50,6 +50,11 @@ type Config struct {
 	// StockSyncInterval is how often this service pushes its own stock
 	// numbers to the platform, per PROMPT.md 8.2 ("раз в 30 секунд").
 	StockSyncInterval time.Duration `env:"STOCK_SYNC_INTERVAL" envDefault:"30s"`
+
+	// MenuJSON optionally overrides kitchen.ownMenu()'s built-in default —
+	// the same []MenuSyncCategory JSON shape PUT /partner/menu itself
+	// accepts (kitchen.BuildMenu). Empty means "use the built-in menu".
+	MenuJSON string `env:"MENU_JSON"`
 }
 
 func Load() (Config, error) {

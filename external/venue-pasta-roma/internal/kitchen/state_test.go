@@ -145,6 +145,90 @@ func TestAdvanceOrder_UpdatesStatusAndSchedule(t *testing.T) {
 	assert.WithinDuration(t, next, got.NextAdvanceAt, time.Millisecond)
 }
 
+func TestCancelOrder_ClearsPendingRetry(t *testing.T) {
+	s := NewState()
+	orderID := uuid.New()
+	s.AddOrder(Order{ID: orderID, Status: "pending_accept", Pending: PendingAccept, NextRetryAt: time.Now().Add(time.Minute)})
+
+	_, ok := s.CancelOrder(orderID)
+
+	require.True(t, ok)
+	got := s.GetOrder(orderID)
+	assert.Equal(t, PendingNone, got.Pending, "a cancelled order must not still be retried")
+	assert.True(t, got.NextRetryAt.IsZero())
+}
+
+func TestDuePendingActions_OnlyReturnsWhatIsDueAndPending(t *testing.T) {
+	s := NewState()
+	dueID, notDueID, notPendingID := uuid.New(), uuid.New(), uuid.New()
+	s.AddOrder(Order{ID: dueID, Pending: PendingAccept, NextRetryAt: time.Now().Add(-time.Second)})
+	s.AddOrder(Order{ID: notDueID, Pending: PendingReject, NextRetryAt: time.Now().Add(time.Hour)})
+	s.AddOrder(Order{ID: notPendingID, Status: "confirmed"})
+
+	due := s.DuePendingActions(time.Now())
+
+	require.Len(t, due, 1)
+	assert.Equal(t, dueID, due[0].ID)
+}
+
+func TestResolvePending_ClearsPendingAndSetsStatus(t *testing.T) {
+	s := NewState()
+	orderID := uuid.New()
+	s.AddOrder(Order{ID: orderID, Status: "pending_accept", Pending: PendingAccept, NextRetryAt: time.Now().Add(time.Minute)})
+
+	next := time.Now().Add(time.Minute)
+	s.ResolvePending(orderID, "confirmed", next)
+
+	got := s.GetOrder(orderID)
+	assert.Equal(t, "confirmed", got.Status)
+	assert.Equal(t, PendingNone, got.Pending)
+	assert.WithinDuration(t, next, got.NextAdvanceAt, time.Millisecond)
+	assert.True(t, got.NextRetryAt.IsZero())
+}
+
+func TestScheduleRetry_UpdatesNextRetryAtOnly(t *testing.T) {
+	s := NewState()
+	orderID := uuid.New()
+	s.AddOrder(Order{ID: orderID, Status: "pending_accept", Pending: PendingAccept})
+
+	next := time.Now().Add(time.Minute)
+	s.ScheduleRetry(orderID, next)
+
+	got := s.GetOrder(orderID)
+	assert.Equal(t, "pending_accept", got.Status)
+	assert.Equal(t, PendingAccept, got.Pending)
+	assert.WithinDuration(t, next, got.NextRetryAt, time.Millisecond)
+}
+
+func TestActiveOrderCount_ExcludesTerminalStatuses(t *testing.T) {
+	s := NewState()
+	s.AddOrder(Order{ID: uuid.New(), Status: "confirmed"})
+	s.AddOrder(Order{ID: uuid.New(), Status: "cooking"})
+	s.AddOrder(Order{ID: uuid.New(), Status: "delivered"})
+	s.AddOrder(Order{ID: uuid.New(), Status: "rejected"})
+	s.AddOrder(Order{ID: uuid.New(), Status: "cancelled"})
+
+	assert.Equal(t, 2, s.ActiveOrderCount())
+}
+
+func TestMarkEventSeen_EvictsOldestPastCapacity(t *testing.T) {
+	s := newStateWithCap(2)
+	a, b, c := uuid.New(), uuid.New(), uuid.New()
+
+	assert.True(t, s.MarkEventSeen(a))
+	assert.True(t, s.MarkEventSeen(b))
+	assert.True(t, s.MarkEventSeen(c)) // pushes a out once the cap of 2 is exceeded
+
+	// b and c checked first: MarkEventSeen on an already-seen id never
+	// mutates seenOrder, so these two checks cannot themselves evict
+	// anything. a is checked last on purpose — re-marking it as seen is
+	// itself a mutation (it evicts b in turn), so it must not run before
+	// the assertions that still depend on b being present.
+	assert.False(t, s.MarkEventSeen(b), "b is still within the capacity window and must still dedupe")
+	assert.False(t, s.MarkEventSeen(c), "c is still within the capacity window and must still dedupe")
+	assert.True(t, s.MarkEventSeen(a), "a must have been evicted and so reads as new again")
+}
+
 // stockByID is a small test helper turning StockSnapshot's slice into a map
 // keyed by platform id, since assertions here care about specific items,
 // not the slice's (unspecified) order.

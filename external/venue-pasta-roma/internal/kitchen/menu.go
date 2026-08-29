@@ -2,15 +2,35 @@ package kitchen
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"venue-pasta-roma/internal/generated/partnerclient"
 )
 
-// ownMenu is this venue's own menu, as it exists in the venue's imagined
-// internal system — external ids are picked here, before the platform has
-// ever heard of any of these dishes, which is the whole point of
-// PROMPT.md's "source/external_id" mechanism (docs/schema-decisions.md).
+// BuildMenu returns the menu this service should push to the platform:
+// menuJSON (config.Config.MenuJSON, env MENU_JSON) when set — the same
+// []MenuSyncCategory shape PUT /menu itself accepts, so an operator can
+// swap this venue's menu without a rebuild — or ownMenu()'s built-in
+// default otherwise.
+func BuildMenu(menuJSON string) ([]partnerclient.MenuSyncCategory, error) {
+	if menuJSON == "" {
+		return ownMenu(), nil
+	}
+	var categories []partnerclient.MenuSyncCategory
+	if err := json.Unmarshal([]byte(menuJSON), &categories); err != nil {
+		return nil, fmt.Errorf("parse MENU_JSON: %w", err)
+	}
+	if len(categories) == 0 {
+		return nil, fmt.Errorf("MENU_JSON must contain at least one category")
+	}
+	return categories, nil
+}
+
+// ownMenu is this venue's own default menu, as it exists in the venue's
+// imagined internal system — external ids are picked here, before the
+// platform has ever heard of any of these dishes, which is the whole point
+// of PROMPT.md's "source/external_id" mechanism (docs/schema-decisions.md).
 func ownMenu() []partnerclient.MenuSyncCategory {
 	boolPtr := func(b bool) *bool { return &b }
 	intPtr := func(i int) *int { return &i }
@@ -38,13 +58,13 @@ func ownMenu() []partnerclient.MenuSyncCategory {
 	}
 }
 
-// LoadMenu pushes ownMenu to the platform via PUT /partner/menu (PROMPT.md
-// 8.2 item 1) and records the platform ids it gets back into state, so
-// later webhook payloads (which only ever carry the platform's id) can be
-// resolved back to this service's own stock counters.
-func LoadMenu(ctx context.Context, client *partnerclient.ClientWithResponses, state *State) error {
+// LoadMenu pushes categories (see BuildMenu) to the platform via PUT
+// /partner/menu (PROMPT.md 8.2 item 1) and records the platform ids it gets
+// back into state, so later webhook payloads (which only ever carry the
+// platform's id) can be resolved back to this service's own stock counters.
+func LoadMenu(ctx context.Context, client *partnerclient.ClientWithResponses, state *State, categories []partnerclient.MenuSyncCategory) error {
 	resp, err := client.SyncMenuWithResponse(ctx, partnerclient.SyncMenuJSONRequestBody{
-		Categories: ownMenu(),
+		Categories: categories,
 	})
 	if err != nil {
 		return fmt.Errorf("call syncMenu: %w", err)

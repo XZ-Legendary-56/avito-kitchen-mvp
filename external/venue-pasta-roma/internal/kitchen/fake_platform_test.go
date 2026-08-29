@@ -23,7 +23,23 @@ type fakePlatform struct {
 	availUpdates int
 	// menuResponse, when set, is returned verbatim (as JSON) by PUT /menu.
 	menuResponse any
+
+	// acceptResult/rejectResult drive what the next call to that endpoint
+	// answers, so a test can simulate "fails, then later succeeds" across
+	// two calls without needing a real second server.
+	acceptResult fakeResult
+	rejectResult fakeResult
 }
+
+// fakeResult picks one of three ways an endpoint can answer, mirroring the
+// three cases acceptOrder/rejectOrder and their retries actually branch on.
+type fakeResult int
+
+const (
+	fakeOK fakeResult = iota
+	fakeConflict
+	fakeServerError
+)
 
 func newFakePlatform(t *testing.T) *fakePlatform {
 	t.Helper()
@@ -32,11 +48,11 @@ func newFakePlatform(t *testing.T) *fakePlatform {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orders/{id}/accept", func(w http.ResponseWriter, r *http.Request) {
 		f.acceptCalls = append(f.acceptCalls, r.PathValue("id"))
-		writeEmptyJSON(w)
+		writeResult(w, f.acceptResult)
 	})
 	mux.HandleFunc("POST /orders/{id}/reject", func(w http.ResponseWriter, r *http.Request) {
 		f.rejectCalls = append(f.rejectCalls, r.PathValue("id"))
-		writeEmptyJSON(w)
+		writeResult(w, f.rejectResult)
 	})
 	mux.HandleFunc("POST /orders/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		f.advanceCalls = append(f.advanceCalls, r.PathValue("id"))
@@ -62,8 +78,19 @@ func newFakePlatform(t *testing.T) *fakePlatform {
 }
 
 func writeEmptyJSON(w http.ResponseWriter) {
+	writeResult(w, fakeOK)
+}
+
+func writeResult(w http.ResponseWriter, result fakeResult) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	switch result {
+	case fakeConflict:
+		w.WriteHeader(http.StatusConflict)
+	case fakeServerError:
+		w.WriteHeader(http.StatusInternalServerError)
+	default:
+		w.WriteHeader(http.StatusOK)
+	}
 	_, _ = w.Write([]byte("{}"))
 }
 

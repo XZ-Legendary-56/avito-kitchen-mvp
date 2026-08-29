@@ -69,8 +69,12 @@ func run() error {
 	}
 
 	state := kitchen.NewState()
-	logger.Info("loading own menu into the platform")
-	if err := kitchen.LoadMenu(ctx, client, state); err != nil {
+	menu, err := kitchen.BuildMenu(cfg.MenuJSON)
+	if err != nil {
+		return fmt.Errorf("build menu: %w", err)
+	}
+	logger.Info("loading own menu into the platform", "categories", len(menu), "overridden", cfg.MenuJSON != "")
+	if err := kitchen.LoadMenu(ctx, client, state, menu); err != nil {
 		return fmt.Errorf("load menu: %w", err)
 	}
 

@@ -64,6 +64,78 @@ func TestSyncStock_PushesEveryTrackedItem(t *testing.T) {
 	assert.Equal(t, 1, platform.availUpdates)
 }
 
+func TestRetryPendingActions_AcceptSucceedsOnRetry_ResolvesToConfirmed(t *testing.T) {
+	platform := newFakePlatform(t)
+	state := NewState()
+	orderID := uuid.New()
+	state.AddOrder(Order{
+		ID:          orderID,
+		Status:      "pending_accept",
+		Pending:     PendingAccept,
+		ETAMinutes:  20,
+		NextRetryAt: time.Now().Add(-time.Second),
+	})
+
+	retryPendingActions(context.Background(), platform.client(t), state, time.Minute, discardLogger())
+
+	require.Len(t, platform.acceptCalls, 1)
+	got := state.GetOrder(orderID)
+	assert.Equal(t, "confirmed", got.Status)
+	assert.Equal(t, PendingNone, got.Pending)
+	assert.False(t, got.NextAdvanceAt.IsZero(), "a resolved accept must re-enter the normal status ticker")
+}
+
+func TestRetryPendingActions_AcceptConflict_TreatedAsAlreadyResolved(t *testing.T) {
+	platform := newFakePlatform(t)
+	platform.acceptResult = fakeConflict
+	state := NewState()
+	orderID := uuid.New()
+	state.AddOrder(Order{ID: orderID, Status: "pending_accept", Pending: PendingAccept, NextRetryAt: time.Now().Add(-time.Second)})
+
+	retryPendingActions(context.Background(), platform.client(t), state, time.Minute, discardLogger())
+
+	assert.Equal(t, "confirmed", state.GetOrder(orderID).Status)
+}
+
+func TestRetryPendingActions_StillFailing_ReschedulesWithoutChangingStatus(t *testing.T) {
+	platform := newFakePlatform(t)
+	platform.acceptResult = fakeServerError
+	state := NewState()
+	orderID := uuid.New()
+	state.AddOrder(Order{ID: orderID, Status: "pending_accept", Pending: PendingAccept, NextRetryAt: time.Now().Add(-time.Second)})
+
+	retryPendingActions(context.Background(), platform.client(t), state, time.Minute, discardLogger())
+
+	got := state.GetOrder(orderID)
+	assert.Equal(t, "pending_accept", got.Status)
+	assert.Equal(t, PendingAccept, got.Pending)
+	assert.True(t, got.NextRetryAt.After(time.Now()), "a still-failing retry must be rescheduled, not abandoned")
+}
+
+func TestRetryPendingActions_RejectSucceedsOnRetry_ResolvesToRejected(t *testing.T) {
+	platform := newFakePlatform(t)
+	state := NewState()
+	orderID := uuid.New()
+	state.AddOrder(Order{ID: orderID, Status: "pending_reject", Pending: PendingReject, RejectionReason: "no stock", NextRetryAt: time.Now().Add(-time.Second)})
+
+	retryPendingActions(context.Background(), platform.client(t), state, time.Minute, discardLogger())
+
+	require.Len(t, platform.rejectCalls, 1)
+	got := state.GetOrder(orderID)
+	assert.Equal(t, "rejected", got.Status)
+	assert.Equal(t, PendingNone, got.Pending)
+}
+
+func TestRetryPendingActions_NothingDue_NoOp(t *testing.T) {
+	platform := newFakePlatform(t)
+	state := NewState()
+	state.AddOrder(Order{ID: uuid.New(), Status: "pending_accept", Pending: PendingAccept, NextRetryAt: time.Now().Add(time.Hour)})
+
+	retryPendingActions(context.Background(), platform.client(t), state, time.Minute, discardLogger())
+
+	assert.Empty(t, platform.acceptCalls)
+}
+
 func TestSyncStock_NoTrackedItems_SkipsTheCall(t *testing.T) {
 	platform := newFakePlatform(t)
 	state := NewState()

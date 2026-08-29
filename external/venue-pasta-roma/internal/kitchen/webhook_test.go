@@ -156,6 +156,47 @@ func TestHandleWebhook_OrderCreated_InsufficientStock_Rejects(t *testing.T) {
 	assert.Equal(t, 1, state.StockSnapshot()[0].StockQty, "a rejected order must not touch stock")
 }
 
+func TestHandleWebhook_OrderCreated_AcceptCallFails_TracksPendingAndKeepsStockReserved(t *testing.T) {
+	platform := newFakePlatform(t)
+	platform.acceptResult = fakeServerError
+	state := NewState()
+	itemID := uuid.New()
+	state.SetMenu([]MenuItem{{PlatformID: itemID, ExternalID: "pr-carbonara", StockQty: 5}})
+	h := NewHandler(platform.client(t), state, testWebhookSecret, time.Second, discardLogger())
+
+	orderID := uuid.New()
+	req := signedRequest(t, testWebhookSecret, orderCreatedEnvelope(orderID, itemID, 2))
+	rec := httptest.NewRecorder()
+	h.HandleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code, "a failed downstream call must not itself fail the webhook delivery")
+	require.Len(t, platform.acceptCalls, 1)
+
+	tracked := state.GetOrder(orderID)
+	require.NotNil(t, tracked)
+	assert.Equal(t, "pending_accept", tracked.Status)
+	assert.Equal(t, PendingAccept, tracked.Pending)
+	assert.Equal(t, 3, state.StockSnapshot()[0].StockQty, "stock must stay reserved while accept is only pending, not abandoned")
+}
+
+func TestHandleWebhook_OrderCreated_RejectCallFails_TracksPending(t *testing.T) {
+	platform := newFakePlatform(t)
+	platform.rejectResult = fakeServerError
+	state := NewState()
+	itemID := uuid.New()
+	state.SetMenu([]MenuItem{{PlatformID: itemID, ExternalID: "pr-carbonara", StockQty: 1}})
+	h := NewHandler(platform.client(t), state, testWebhookSecret, time.Second, discardLogger())
+
+	orderID := uuid.New()
+	req := signedRequest(t, testWebhookSecret, orderCreatedEnvelope(orderID, itemID, 5))
+	h.HandleWebhook(httptest.NewRecorder(), req)
+
+	tracked := state.GetOrder(orderID)
+	require.NotNil(t, tracked)
+	assert.Equal(t, "pending_reject", tracked.Status)
+	assert.Equal(t, PendingReject, tracked.Pending)
+}
+
 func TestHandleWebhook_DuplicateEventID_ProcessedOnce(t *testing.T) {
 	platform := newFakePlatform(t)
 	state := NewState()
