@@ -1,0 +1,85 @@
+// Package errs defines the domain's typed errors. A domain error always
+// carries a stable, machine-readable Code so adapter/http/httperr can map it
+// to an HTTP status and response body in exactly one place (PROMPT.md
+// 10.2) — no handler ever string-matches an error message to decide what
+// to return.
+//
+// This package must stay dependency-free beyond the standard library
+// (PROMPT.md 6.2: domain imports nothing but stdlib and uuid), since every
+// other domain package imports it.
+package errs
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Code identifies a specific business error. Values match the `code` enum
+// in api/openapi/*.yaml exactly, since that enum is generated from this
+// catalog's intent — adding a code here without a matching enum entry (or
+// vice versa) is a bug.
+type Code string
+
+const (
+	// Order state machine (PROMPT.md 5.4).
+	CodeOrderInvalidStateTransition Code = "ORDER_INVALID_STATE_TRANSITION"
+
+	// Cart invariants (PROMPT.md 5.1).
+	CodeCartVenueMismatch Code = "CART_VENUE_MISMATCH"
+	CodeCartEmpty         Code = "CART_EMPTY"
+
+	// Venue and menu-item availability (PROMPT.md 5.2).
+	CodeVenueClosed              Code = "VENUE_CLOSED"
+	CodeVenueNotAcceptingOrders  Code = "VENUE_NOT_ACCEPTING_ORDERS"
+	CodeItemUnavailable          Code = "ITEM_UNAVAILABLE"
+	CodeInsufficientStock        Code = "INSUFFICIENT_STOCK"
+	CodePriceChanged             Code = "PRICE_CHANGED"
+	CodeMinOrderAmountNotReached Code = "MIN_ORDER_AMOUNT_NOT_REACHED"
+)
+
+// Error is a domain error: a stable Code plus a human-readable Message, and
+// optionally the lower-level error it wraps (kept reachable through Unwrap
+// so errors.Is/errors.As still work across the wrap, per PROMPT.md 10.2).
+type Error struct {
+	Code    Code
+	Message string
+	cause   error
+}
+
+// New creates a fresh domain error with no wrapped cause.
+func New(code Code, message string) *Error {
+	return &Error{Code: code, Message: message}
+}
+
+// Newf is New with fmt.Sprintf-style formatting for Message.
+func Newf(code Code, format string, args ...any) *Error {
+	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
+}
+
+// Wrap creates a domain error that carries cause as its Unwrap target, for
+// when a business rule violation was detected while handling a lower-level
+// error (e.g. a repository call failed in a way that maps to a domain code).
+func Wrap(code Code, message string, cause error) *Error {
+	return &Error{Code: code, Message: message, cause: cause}
+}
+
+func (e *Error) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %s: %v", e.Code, e.Message, e.cause)
+	}
+	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
+
+// Unwrap exposes the wrapped cause, if any, to errors.Is/errors.As.
+func (e *Error) Unwrap() error {
+	return e.cause
+}
+
+// CodeOf extracts the Code carried by err, if err is or wraps an *Error.
+func CodeOf(err error) (Code, bool) {
+	var domainErr *Error
+	if errors.As(err, &domainErr) {
+		return domainErr.Code, true
+	}
+	return "", false
+}
