@@ -29,6 +29,13 @@ var (
 	_ outboxusecase.Repository      = (*OutboxRepository)(nil)
 )
 
+// fetchDueLease is how long FetchDue's claim on a batch holds before another
+// Dispatcher instance is allowed to re-claim it, if the one that claimed it
+// never reports an outcome (crashed, lost its DB connection mid-delivery,
+// etc.). It only needs to comfortably outlast one delivery attempt — the
+// httpClient in adapter/webhook times out well under this.
+const fetchDueLease = time.Minute
+
 // Enqueue inserts a pending event, due immediately (next_attempt_at defaults
 // to now()). Always called through QuerierFromContext, so it lands in
 // whichever transaction the caller (checkout or cancellation) already has
@@ -45,20 +52,45 @@ func (r *OutboxRepository) Enqueue(ctx context.Context, e orderusecase.OutboxEve
 	return nil
 }
 
-// FetchDue returns up to limit pending events due at or before now, oldest
-// first (PROMPT.md 6.6: one query, not one per event). Plain SELECT rather
-// than SELECT ... FOR UPDATE SKIP LOCKED — see Dispatcher.ProcessOnce's own
-// doc comment for why that is safe with this project's single-instance
-// deployment.
+// FetchDue atomically claims up to limit pending events due at or before now
+// (PROMPT.md 6.6: one query, not one per event), so that several Dispatcher
+// instances can poll the same table at once without delivering the same
+// event twice. Oldest-due-first only decides which rows get claimed — the
+// UPDATE ... RETURNING that does the claiming makes no promise about what
+// order the claimed rows come back in, so callers must not rely on that.
+//
+// A plain SELECT ... FOR UPDATE SKIP LOCKED alone would not do that here:
+// this is a single autocommitted statement, so any row lock it takes is
+// released the instant the statement finishes — long before Publish's HTTP
+// call even starts, let alone completes. What actually excludes a second
+// instance is the UPDATE ... RETURNING wrapped around it: claiming a row
+// means pushing its next_attempt_at fetchDueLease into the future in the
+// very same statement that selects it, so no other instance's WHERE
+// next_attempt_at <= now() can match it again until the lease expires. The
+// FOR UPDATE SKIP LOCKED inside the CTE only matters for the sliver of time
+// two instances might run this exact statement simultaneously — the lease
+// is what makes the guarantee hold for the whole delivery attempt.
+//
+// If the instance that claimed a batch crashes before calling
+// MarkSent/MarkRetry/MarkFailed, the row stays status='pending' with a
+// stale claim: once the lease expires it becomes due again for whichever
+// instance polls next, so a crash costs a delay, never a lost event.
 func (r *OutboxRepository) FetchDue(ctx context.Context, now time.Time, limit int) ([]outboxusecase.Event, error) {
 	q := QuerierFromContext(ctx, r.pool)
 	rows, err := q.Query(ctx, `
-		SELECT id, aggregate_type, aggregate_id, event_type, event_version, payload, occurred_at, attempts
-		FROM outbox_events
-		WHERE status = 'pending' AND next_attempt_at <= $1
-		ORDER BY next_attempt_at
-		LIMIT $2
-	`, now, limit)
+		WITH claimed AS (
+			SELECT id FROM outbox_events
+			WHERE status = 'pending' AND next_attempt_at <= $1
+			ORDER BY next_attempt_at
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE outbox_events e
+		SET next_attempt_at = $3
+		FROM claimed
+		WHERE e.id = claimed.id
+		RETURNING e.id, e.aggregate_type, e.aggregate_id, e.event_type, e.event_version, e.payload, e.occurred_at, e.attempts
+	`, now, limit, now.Add(fetchDueLease))
 	if err != nil {
 		return nil, fmt.Errorf("query due outbox events: %w", err)
 	}

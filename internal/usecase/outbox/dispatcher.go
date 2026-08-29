@@ -42,13 +42,14 @@ func NewDispatcher(repo Repository, publisher EventPublisher) *Dispatcher {
 // holding a row lock (or even just a long-lived connection) for that long
 // is not something the fetch/update statements below need to pay for.
 //
-// This project runs one Dispatcher instance, so there is no risk of two
-// workers racing to claim the same event — FetchDue is a plain SELECT, not
-// SELECT ... FOR UPDATE SKIP LOCKED. A multi-instance deployment would need
-// that (or an equivalent claim step); PROMPT.md 7.4's own dedup contract
-// (receivers keying off X-Event-Id) means an occasional double-delivery
-// under such a deployment would still be safe, just redundant — this is a
-// note for that future, not a gap today.
+// Several Dispatcher instances can safely call this concurrently: Repository
+// is expected to atomically claim what it returns (adapter/postgres's
+// implementation does so with SELECT ... FOR UPDATE SKIP LOCKED plus a
+// short lease — see its own doc comment), so two instances never both
+// deliver the same event under normal operation. PROMPT.md 7.4's own dedup
+// contract (receivers keying off X-Event-Id) is the backstop for the rare
+// case a claim's lease expires early (a crashed instance) and a second one
+// picks the same event back up.
 func (d *Dispatcher) ProcessOnce(ctx context.Context, limit int) (int, error) {
 	events, err := d.repo.FetchDue(ctx, d.now(), limit)
 	if err != nil {

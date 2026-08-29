@@ -14,9 +14,12 @@ import (
 // Enqueue port for exactly that reason — PROMPT.md 6.2, this package must
 // not be a dependency of usecase/order just to write one row).
 type Repository interface {
-	// FetchDue returns up to limit pending events whose next_attempt_at is
-	// at or before now, oldest first — never a query per event, the same
-	// PROMPT.md 6.6 rule the catalog listing follows.
+	// FetchDue atomically claims up to limit pending events whose
+	// next_attempt_at is at or before now — never a query per event, the
+	// same PROMPT.md 6.6 rule the catalog listing follows. "Atomically
+	// claims" means the implementation itself must ensure two concurrent
+	// callers (two Dispatcher instances) never both receive the same event;
+	// see adapter/postgres's implementation for how.
 	FetchDue(ctx context.Context, now time.Time, limit int) ([]Event, error)
 	// MarkSent records a successful delivery.
 	MarkSent(ctx context.Context, eventID uuid.UUID, sentAt time.Time) error
